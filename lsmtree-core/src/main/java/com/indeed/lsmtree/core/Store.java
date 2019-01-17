@@ -11,7 +11,7 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
- package com.indeed.lsmtree.core;
+package com.indeed.lsmtree.core;
 
 import com.google.common.base.Charsets;
 import com.google.common.base.Function;
@@ -77,7 +77,7 @@ public final class Store<K, V> implements Closeable {
 
     private static final Logger log = Logger.getLogger(Store.class);
 
-    private final AtomicSharedReference<GenerationState<K,V>> generationState;
+    private final AtomicSharedReference<GenerationState<K, V>> generationState;
 
     private final File root;
 
@@ -118,21 +118,22 @@ public final class Store<K, V> implements Closeable {
     /**
      * Use {@link StoreBuilder} to create a store.
      *
-     * @param root                          root lsm tree index directory
-     * @param keySerializer                 key serializer
-     * @param valueSerializer               value serializer
-     * @param comparator                    key comparator
-     * @param maxVolatileGenerationSize     max size of volatile generation in bytes before a compaction should occur
-     * @param storageType                   storage type
-     * @param codec                         compression codec
-     * @param readOnly                      open lsm tree in read only mode
-     * @param dedicatedPartition            true if lsm tree is on a dedicated partition
-     * @param reservedSpaceThreshold        disk space in bytes that must be available after compactions
-     * @param mlockFiles                    mlock files if true
-     * @param bloomFilterMemory             memory allocated to bloom filter, in bytes
-     * @param mlockBloomFilters             mlock bloom filters if true
-     * @throws IOException  if an I/O error occurs
+     * @param root                      root lsm tree index directory
+     * @param keySerializer             key serializer
+     * @param valueSerializer           value serializer
+     * @param comparator                key comparator
+     * @param maxVolatileGenerationSize max size of volatile generation in bytes before a compaction should occur
+     * @param storageType               storage type
+     * @param codec                     compression codec
+     * @param readOnly                  open lsm tree in read only mode
+     * @param dedicatedPartition        true if lsm tree is on a dedicated partition
+     * @param reservedSpaceThreshold    disk space in bytes that must be available after compactions
+     * @param mlockFiles                mlock files if true
+     * @param bloomFilterMemory         memory allocated to bloom filter, in bytes
+     * @param mlockBloomFilters         mlock bloom filters if true
+     * @throws IOException if an I/O error occurs
      */
+    // 构造函数，对store进行初始化
     Store(
             File root,
             Serializer<K> keySerializer,
@@ -154,6 +155,7 @@ public final class Store<K, V> implements Closeable {
         this.dedicatedPartition = dedicatedPartition;
         this.reservedSpaceThreshold = reservedSpaceThreshold;
         this.mlockFiles = mlockFiles;
+        // 如果root不是一个文件夹的话就会创建一个文件夹
         if (!root.isDirectory()) {
             if (!root.mkdirs()) {
                 final String err = root.getAbsolutePath() + " could not be created";
@@ -162,25 +164,28 @@ public final class Store<K, V> implements Closeable {
             }
         }
         if (!readOnly) {
+            // 不是只读的文件，那么会加一个文件锁
             final File lockFileLock = new File(root, "write.lock.lock");
             try {
                 if (!lockFileLock.createNewFile()) {
-                    throw new IOException(lockFileLock.getAbsolutePath()+" is already locked");
+                    throw new IOException(lockFileLock.getAbsolutePath() + " is already locked");
                 }
                 final File lockFile = new File(root, "write.lock");
+                // 判断是否已经上锁了
                 if (lockFile.exists()) {
                     final Integer pid = PosixFileOperations.tryParseInt(Files.toString(lockFile, Charsets.UTF_8));
                     if (pid == null || PosixFileOperations.isProcessRunning(pid, true)) {
                         lockFileLock.delete();
-                        throw new IOException(lockFile.getAbsolutePath()+" is already locked");
+                        throw new IOException(lockFile.getAbsolutePath() + " is already locked");
                     }
                 }
+                // 如果没有的话就会写文件，加锁
                 Files.write(String.valueOf(PosixFileOperations.getPID()), lockFile, Charsets.UTF_8);
                 lockFileLock.delete();
                 this.lockFile = lockFile;
                 this.lockFile.deleteOnExit();
             } catch (IOException e) {
-                log.error("problem locking lsmtree in directory "+root.getAbsolutePath(), e);
+                log.error("problem locking lsmtree in directory " + root.getAbsolutePath(), e);
                 throw e;
             }
         } else {
@@ -191,19 +196,23 @@ public final class Store<K, V> implements Closeable {
         this.valueSerializer = valueSerializer;
         this.comparator = Ordering.from(comparator);
         this.maxVolatileGenerationSize = maxVolatileGenerationSize;
+        // 初始化
         generationState = AtomicSharedReference.create();
+        // 数据目录
         dataDir = new File(root, "data");
-        final VolatileGeneration<K,V> nextVolatileGeneration;
-        final List<Generation<K,V>> stableGenerations = new ArrayList<Generation<K, V>>();
+        final VolatileGeneration<K, V> nextVolatileGeneration;
+        final List<Generation<K, V>> stableGenerations = new ArrayList<Generation<K, V>>();
         final List<File> toDelete = new ArrayList<File>();
         lastUsedTimeStamp = new AtomicLong();
         memoryManager = new BloomFilter.MemoryManager(bloomFilterMemory, mlockBloomFilters);
         try {
+            // 如果数据目录不存在则创建数据目录
             if (!dataDir.exists()) {
                 dataDir.mkdirs();
                 final File newLog = getNextLogFile();
                 nextVolatileGeneration = new VolatileGeneration<K, V>(newLog, keySerializer, valueSerializer, comparator);
             } else {
+                // 如果数据目录存在的话
                 long maxTimestamp = 0;
                 maxTimestamp = findMaxTimestamp(root, maxTimestamp);
                 maxTimestamp = findMaxTimestamp(dataDir, maxTimestamp);
@@ -212,10 +221,10 @@ public final class Store<K, V> implements Closeable {
                 final File state = new File(latestDir, "state");
                 final Yaml yaml = new Yaml();
                 final Reader reader = new InputStreamReader(new FileInputStream(state));
-                final Map<String, Object> map = (Map<String, Object>)yaml.load(reader);
+                final Map<String, Object> map = (Map<String, Object>) yaml.load(reader);
                 Closeables2.closeQuietly(reader, log);
-                final File volatileGenerationFile = new File(latestDir, (String)map.get("volatileGeneration"));
-                final List<String> oldStableGenerations = (List<String>)map.get("stableGenerations");
+                final File volatileGenerationFile = new File(latestDir, (String) map.get("volatileGeneration"));
+                final List<String> oldStableGenerations = (List<String>) map.get("stableGenerations");
                 if (readOnly) {
                     nextVolatileGeneration = new VolatileGeneration<K, V>(volatileGenerationFile, keySerializer, valueSerializer, comparator, true);
                     for (String generationName : oldStableGenerations) {
@@ -257,7 +266,7 @@ public final class Store<K, V> implements Closeable {
                             final File tempLog = getNextLogFile();
                             final VolatileGeneration temp = new VolatileGeneration(tempLog, keySerializer, valueSerializer, comparator);
                             temp.replayTransactionLog(generationFile);
-                            stableGenerations.add(doCompaction(Collections.singletonList((Generation<K, V>)temp), true));
+                            stableGenerations.add(doCompaction(Collections.singletonList((Generation<K, V>) temp), true));
                             temp.delete();
                             toDelete.add(getDataFile(generationFile));
                         } else {
@@ -275,8 +284,8 @@ public final class Store<K, V> implements Closeable {
                     }
                 }
             }
-            final GenerationState<K,V> nextState;
-            final List<SharedReference<? extends Generation<K,V>>> stableGenerationReferences = Lists.newArrayList();
+            final GenerationState<K, V> nextState;
+            final List<SharedReference<? extends Generation<K, V>>> stableGenerationReferences = Lists.newArrayList();
             for (Generation<K, V> generation : stableGenerations) {
                 stableGenerationReferences.add(SharedReference.create(generation));
             }
@@ -290,13 +299,13 @@ public final class Store<K, V> implements Closeable {
                 nextState = new GenerationState<K, V>(stableGenerationReferences, SharedReference.create(nextVolatileGeneration), getDataFile(new File(root, "latest")));
             }
             generationState.set(nextState);
-            for (Generation<K,V> generation : nextState.stableGenerations) {
+            for (Generation<K, V> generation : nextState.stableGenerations) {
                 totalGenerationSpace.addAndGet(generation.sizeInBytes());
             }
             if (!readOnly) {
                 compactor = new Compactor();
                 for (File f : toDelete) {
-                    log.info("deleting "+f.getPath());
+                    log.info("deleting " + f.getPath());
                     if (f.isDirectory()) {
                         PosixFileOperations.rmrf(f);
                     } else {
@@ -314,17 +323,19 @@ public final class Store<K, V> implements Closeable {
         }
     }
 
+    // 获取数据文件
     private File getDataFile(File file) {
         return new File(dataDir, file.getName());
     }
 
+    // 遍历目录下的所有文件，找出文件名称中带有的最大的时间戳
     private long findMaxTimestamp(final File dir, long maxTimestamp) {
         for (String str : dir.list()) {
             long timestamp = 0;
             if (str.matches("\\d+")) {
                 timestamp = Long.parseLong(str);
             } else if (str.matches("\\d+\\.log")) {
-                timestamp = Long.parseLong(str.substring(0, str.length()-4));
+                timestamp = Long.parseLong(str.substring(0, str.length() - 4));
             }
             if (timestamp > maxTimestamp) {
                 maxTimestamp = timestamp;
@@ -333,12 +344,15 @@ public final class Store<K, V> implements Closeable {
         return maxTimestamp;
     }
 
-    private <A, B> A doWithState(F2<GenerationState<K,V>, B, A> function, @Nullable B b) throws IOException {
+    // 执行相应函数，主要是在函数外面封装了一层状态
+    private <A, B> A doWithState(F2<GenerationState<K, V>, B, A> function, @Nullable B b) throws IOException {
+        // 获取状态？
         final SharedReference<GenerationState<K, V>> localState = generationState.getCopy();
         try {
             if (localState == null) {
                 throw new IOException("store is closed");
             }
+            // 执行函数
             return function.f(localState.get(), b);
         } catch (RuntimeIOException e) {
             Throwables.propagateIfInstanceOf(e.getCause(), IOException.class);
@@ -349,19 +363,22 @@ public final class Store<K, V> implements Closeable {
         }
     }
 
-    private <B> void doUntilSuccessful(F2<GenerationState<K,V>, B, Boolean> function, B b) throws IOException {
-        while (!doWithState(function, b));
+    // TODO @lmj <B> 这个地方没咋看懂，已经不是太熟悉Java了。
+    private <B> void doUntilSuccessful(F2<GenerationState<K, V>, B, Boolean> function, B b) throws IOException {
+        // TODO @lmj 在这里会进行不断的重试吗？
+        while (!doWithState(function, b)) ;
     }
 
-    private final F2<GenerationState<K,V>, K, V> get = new F2<GenerationState<K, V>, K, V>() {
+    private final F2<GenerationState<K, V>, K, V> get = new F2<GenerationState<K, V>, K, V>() {
         @Override
-        public @Nullable V f(GenerationState<K, V> localState, K key) {
-            Generation.Entry<K,V> getResult = localState.volatileGeneration.get(key);
+        public @Nullable
+        V f(GenerationState<K, V> localState, K key) {
+            Generation.Entry<K, V> getResult = localState.volatileGeneration.get(key);
             if (getResult != null) {
                 if (getResult.isDeleted()) return null;
                 return getResult.getValue();
             }
-            for (Generation<K,V> stableGeneration : localState.stableGenerations) {
+            for (Generation<K, V> stableGeneration : localState.stableGenerations) {
                 getResult = stableGeneration.get(key);
                 if (getResult != null) {
                     if (getResult.isDeleted()) return null;
@@ -375,22 +392,24 @@ public final class Store<K, V> implements Closeable {
     /**
      * Return the value associated with key, or null if no mapping exists.
      *
-     * @param key           lookup key
-     * @return              value for key, or null if key does not exist
-     * @throws IOException  if an I/O error occurs
+     * @param key lookup key
+     * @return value for key, or null if key does not exist
+     * @throws IOException if an I/O error occurs
      */
-    public @Nullable V get(K key) throws IOException {
+    public @Nullable
+    V get(K key) throws IOException {
         return doWithState(get, key);
     }
 
-    private final F2<GenerationState<K,V>, K, Boolean> containsKey = new F2<GenerationState<K, V>, K, Boolean>() {
+    // 判断是否包含给定key
+    private final F2<GenerationState<K, V>, K, Boolean> containsKey = new F2<GenerationState<K, V>, K, Boolean>() {
         @Override
         public Boolean f(GenerationState<K, V> localState, K key) {
             Boolean isDeleted = localState.volatileGeneration.isDeleted(key);
             if (isDeleted != null) {
                 return isDeleted != Boolean.TRUE;
             }
-            for (Generation<K,V> stableGeneration : localState.stableGenerations) {
+            for (Generation<K, V> stableGeneration : localState.stableGenerations) {
                 isDeleted = stableGeneration.isDeleted(key);
                 if (isDeleted != null) {
                     return isDeleted != Boolean.TRUE;
@@ -403,27 +422,32 @@ public final class Store<K, V> implements Closeable {
     /**
      * Returns true if the key exists in the store.
      *
-     * @param key           lookup key
-     * @return              true if key exists in store
-     * @throws IOException  if an I/O error occurs
+     * @param key lookup key
+     * @return true if key exists in store
+     * @throws IOException if an I/O error occurs
      */
     public boolean containsKey(K key) throws IOException {
         return doWithState(containsKey, key);
     }
-    
-    private final F2<GenerationState<K,V>, Entry<K,V>, Boolean> put = new F2<GenerationState<K, V>, Entry<K,V>, Boolean>() {
+
+    // put 方法的实现
+    private final F2<GenerationState<K, V>, Entry<K, V>, Boolean> put = new F2<GenerationState<K, V>, Entry<K, V>, Boolean>() {
+        // 这里的localState可以理解为当前的数据库, keyValue是即将写入的keyValue对
         @Override
-        public Boolean f(GenerationState<K, V> localState, Entry<K,V> keyValue) {
+        public Boolean f(GenerationState<K, V> localState, Entry<K, V> keyValue) {
             try {
                 try {
+                    // 把keyValue放入到localState中
                     localState.volatileGeneration.put(keyValue.getKey(), keyValue.getValue());
                 } catch (IOException e) {
+                    // 没放进去的话进行compact
                     compactor.compact();
                     throw e;
                 }
                 if (localState.volatileGeneration.sizeInBytes() > maxVolatileGenerationSize) {
                     compactor.compact();
                 }
+                // 放入key value成功
                 return true;
             } catch (TransactionLog.LogClosedException e) {
                 return false;
@@ -436,24 +460,27 @@ public final class Store<K, V> implements Closeable {
     /**
      * Writes a key/value pair to store, overwriting any existing entry for the key.
      *
-     * @param key           key
-     * @param value         value
-     * @throws IOException  if an I/O exception occurs
+     * @param key   key
+     * @param value value
+     * @throws IOException if an I/O exception occurs
      */
+    // 将数据存入数据库
     public void put(K key, V value) throws IOException {
         doUntilSuccessful(put, new Entry<K, V>(key, value));
     }
-    
-    private final F2<GenerationState<K,V>, K, Boolean> delete = new F2<GenerationState<K,V>, K, Boolean>() {
+
+    private final F2<GenerationState<K, V>, K, Boolean> delete = new F2<GenerationState<K, V>, K, Boolean>() {
         @Override
         public Boolean f(GenerationState localState, Object key) {
             try {
                 try {
                     localState.volatileGeneration.delete(key);
                 } catch (IOException e) {
+                    // 如果抛出来IOException的话会进行compact
                     compactor.compact();
                     throw e;
                 }
+                // 如果大小超过maxVolatileGenerationSize的话也会进行compact
                 if (localState.volatileGeneration.sizeInBytes() > maxVolatileGenerationSize) {
                     compactor.compact();
                 }
@@ -469,21 +496,24 @@ public final class Store<K, V> implements Closeable {
     /**
      * Removes the mapping for a key.
      *
-     * @param key           key to delete
-     * @throws IOException  if an I/O error occurs
+     * @param key key to delete
+     * @throws IOException if an I/O error occurs
      */
+    // 删除key
     public void delete(K key) throws IOException {
         doUntilSuccessful(delete, key);
     }
-    
-    private static <K,V> MergingIterator<K,V> getMergedIterator(GenerationState<K,V> state, Function<Generation<K,V>, Iterator<Generation.Entry<K,V>>> f, Comparator<K> comp) {
-        final List<Generation<K,V>> generations = Lists.newArrayList();
+
+    private static <K, V> MergingIterator<K, V> getMergedIterator(GenerationState<K, V> state, Function<Generation<K, V>, Iterator<Generation.Entry<K, V>>> f, Comparator<K> comp) {
+        final List<Generation<K, V>> generations = Lists.newArrayList();
         generations.add(state.volatileGeneration);
         generations.addAll(state.stableGenerations);
         return new MergingIterator<K, V>(Lists.transform(generations, f), comp);
     }
-    
-    @Nullable private static <K,V> Entry<K,V> getFirstNotDeleted(Iterator<Generation.Entry<K,V>> iterator) {
+
+    // 获取第一个未被删除的节点
+    @Nullable
+    private static <K, V> Entry<K, V> getFirstNotDeleted(Iterator<Generation.Entry<K, V>> iterator) {
         while (iterator.hasNext()) {
             final Generation.Entry<K, V> next = iterator.next();
             if (!next.isDeleted()) {
@@ -492,12 +522,13 @@ public final class Store<K, V> implements Closeable {
         }
         return null;
     }
-    
-    private F2<GenerationState<K,V>, K, Entry<K,V>> neighbor(final boolean reverse, final boolean inclusive) {
+
+    private F2<GenerationState<K, V>, K, Entry<K, V>> neighbor(final boolean reverse, final boolean inclusive) {
         return new F2<GenerationState<K, V>, K, Entry<K, V>>() {
 
-            public @Nullable Entry<K, V> f(GenerationState<K, V> kvGenerationState, final K k) {
-                final MergingIterator<K,V> iterator = getMergedIterator(
+            public @Nullable
+            Entry<K, V> f(GenerationState<K, V> kvGenerationState, final K k) {
+                final MergingIterator<K, V> iterator = getMergedIterator(
                         kvGenerationState,
                         new Function<Generation<K, V>, Iterator<Generation.Entry<K, V>>>() {
 
@@ -517,62 +548,68 @@ public final class Store<K, V> implements Closeable {
     }
 
     /**
-     * @param key           lookup key
-     * @return              the first entry with key strictly less than specified key, or null if no such entry exists
-     * @throws IOException  if an I/O error occurs
+     * @param key lookup key
+     * @return the first entry with key strictly less than specified key, or null if no such entry exists
+     * @throws IOException if an I/O error occurs
      */
-    public @Nullable Entry<K,V> lower(final K key) throws IOException {
+    public @Nullable
+    Entry<K, V> lower(final K key) throws IOException {
         return doWithState(neighbor(true, false), key);
     }
 
     /**
-     * @param key           lookup key
-     * @return              the first entry with key less than or equal to specified key, or null if no such entry exists
-     * @throws IOException  if an I/O error occurs
+     * @param key lookup key
+     * @return the first entry with key less than or equal to specified key, or null if no such entry exists
+     * @throws IOException if an I/O error occurs
      */
-    public @Nullable Entry<K,V> floor(K key) throws IOException {
+    public @Nullable
+    Entry<K, V> floor(K key) throws IOException {
         return doWithState(neighbor(true, true), key);
     }
 
     /**
-     * @param key           lookup key
-     * @return              the first entry with key greater than or equal to specified key, or null if no such entry exists
-     * @throws IOException  if an I/O error occurs
+     * @param key lookup key
+     * @return the first entry with key greater than or equal to specified key, or null if no such entry exists
+     * @throws IOException if an I/O error occurs
      */
-    public @Nullable Entry<K,V> ceil(K key) throws IOException {
+    public @Nullable
+    Entry<K, V> ceil(K key) throws IOException {
         return doWithState(neighbor(false, true), key);
     }
 
     /**
-     * @param key           lookup key
-     * @return              the first entry with key strictly greater than specified key, or null if no such entry exists
-     * @throws IOException  if an I/O error occurs
+     * @param key lookup key
+     * @return the first entry with key strictly greater than specified key, or null if no such entry exists
+     * @throws IOException if an I/O error occurs
      */
-    public @Nullable Entry<K,V> higher(K key) throws IOException {
+    public @Nullable
+    Entry<K, V> higher(K key) throws IOException {
         return doWithState(neighbor(false, false), key);
     }
 
     /**
-     * @return              the entry with lowest key, or null if no such entry exists
-     * @throws IOException  if an I/O error occurs
+     * @return the entry with lowest key, or null if no such entry exists
+     * @throws IOException if an I/O error occurs
      */
-    public @Nullable Entry<K,V> first() throws IOException {
+    public @Nullable
+    Entry<K, V> first() throws IOException {
         return doWithState(neighbor(false, false), null);
     }
 
     /**
-     * @return              the entry with highest key, or null if no such entry exists
-     * @throws IOException  if an I/O error occurs
+     * @return the entry with highest key, or null if no such entry exists
+     * @throws IOException if an I/O error occurs
      */
-    public @Nullable Entry<K,V> last() throws IOException {
+    public @Nullable
+    Entry<K, V> last() throws IOException {
         return doWithState(neighbor(true, false), null);
     }
 
     /**
-     * @return              a sorted iterator over all entries in the store
-     * @throws IOException  if an I/O error occurs
+     * @return a sorted iterator over all entries in the store
+     * @throws IOException if an I/O error occurs
      */
-    public Iterator<Entry<K,V>> iterator() throws IOException {
+    public Iterator<Entry<K, V>> iterator() throws IOException {
         return iterator(null, false, false);
     }
 
@@ -580,20 +617,20 @@ public final class Store<K, V> implements Closeable {
      * Returns a sorted iterator over entries greater than or equal to a specified key.
      * Whether or not keys must be strictly greater is controllable by an inclusive argument.
      *
-     * @param start         return entries only greater than this key
-     * @param inclusive     if true, include entry if its key is start
-     * @return              a sorted iterator over entries fitting the arguments
-     * @throws IOException  if an I/O error occurs
+     * @param start     return entries only greater than this key
+     * @param inclusive if true, include entry if its key is start
+     * @return a sorted iterator over entries fitting the arguments
+     * @throws IOException if an I/O error occurs
      */
-    public Iterator<Entry<K,V>> iterator(final K start, final boolean inclusive) throws IOException {
+    public Iterator<Entry<K, V>> iterator(final K start, final boolean inclusive) throws IOException {
         return iterator(start, inclusive, false);
     }
 
     /**
-     * @return              a reverse sorted iterator over all entries in the store
-     * @throws IOException  if an I/O error occurs
+     * @return a reverse sorted iterator over all entries in the store
+     * @throws IOException if an I/O error occurs
      */
-    public Iterator<Entry<K,V>> reverseIterator() throws IOException {
+    public Iterator<Entry<K, V>> reverseIterator() throws IOException {
         return iterator(null, false, true);
     }
 
@@ -601,12 +638,12 @@ public final class Store<K, V> implements Closeable {
      * Returns a reverse sorted iterator over entries less than or equal to a specified key.
      * Whether or not keys must be strictly less is controllable by an inclusive argument.
      *
-     * @param start         return entries only less than this key
-     * @param inclusive     if true, include entry if its key is start
-     * @return              a reverse sorted iterator over entries fitting the arguments
-     * @throws IOException  if an I/O error occurs
+     * @param start     return entries only less than this key
+     * @param inclusive if true, include entry if its key is start
+     * @return a reverse sorted iterator over entries fitting the arguments
+     * @throws IOException if an I/O error occurs
      */
-    public Iterator<Entry<K,V>> reverseIterator(final K start, final boolean inclusive) throws IOException {
+    public Iterator<Entry<K, V>> reverseIterator(final K start, final boolean inclusive) throws IOException {
         return iterator(start, inclusive, true);
     }
 
@@ -614,20 +651,20 @@ public final class Store<K, V> implements Closeable {
      * Return a sorted iterator over entries starting at a specified key. Whether the iterator is sorted in ascending or
      * descending order and whether the entries need to be strictly greater than a specified key is controllable by arguments.
      *
-     * @param start         comparison key
-     * @param inclusive     if true, include entries with the key
-     * @param reverse       if true, entries will be iterated over in descending order
-     * @return              sorted iterator over entries
-     * @throws IOException  if an I/O error occurs
+     * @param start     comparison key
+     * @param inclusive if true, include entries with the key
+     * @param reverse   if true, entries will be iterated over in descending order
+     * @return sorted iterator over entries
+     * @throws IOException if an I/O error occurs
      */
-    public Iterator<Entry<K,V>> iterator(final @Nullable K start, final boolean inclusive, final boolean reverse) throws IOException {
+    public Iterator<Entry<K, V>> iterator(final @Nullable K start, final boolean inclusive, final boolean reverse) throws IOException {
         return new Iterator<Entry<K, V>>() {
-            
-            Deque<Entry<K,V>> buffer;
+
+            Deque<Entry<K, V>> buffer;
 
             Processor<Entry<K, V>, Deque<Entry<K, V>>> processor = new Processor<Entry<K, V>, Deque<Entry<K, V>>>() {
 
-                final Input.Matcher<Entry<K,V>, Iteratee<Entry<K,V>, Deque<Entry<K,V>>>> matcher = new Input.Matcher<Entry<K,V>, Iteratee<Entry<K,V>, Deque<Entry<K,V>>>>() {
+                final Input.Matcher<Entry<K, V>, Iteratee<Entry<K, V>, Deque<Entry<K, V>>>> matcher = new Input.Matcher<Entry<K, V>, Iteratee<Entry<K, V>, Deque<Entry<K, V>>>>() {
 
                     public Iteratee<Entry<K, V>, Deque<Entry<K, V>>> eof() {
                         return Done(buffer);
@@ -648,7 +685,7 @@ public final class Store<K, V> implements Closeable {
                     return input.match(matcher);
                 }
             };
-            
+
             {
                 buffer = new ArrayDeque<Entry<K, V>>(1000);
                 if (start == null) {
@@ -663,7 +700,7 @@ public final class Store<K, V> implements Closeable {
             }
 
             public Entry<K, V> next() {
-                final Entry<K,V> ret = buffer.removeFirst();
+                final Entry<K, V> ret = buffer.removeFirst();
                 if (buffer.isEmpty()) {
                     try {
                         process(processor, ret.getKey(), false, reverse);
@@ -683,20 +720,20 @@ public final class Store<K, V> implements Closeable {
     /**
      * Uses specified processor to iterate over entries in the store, returning some value determined by the processor.
      *
-     * @param processor     processor
-     * @param <A>           return type
-     * @return              value determined by processor
-     * @throws IOException  if an I/O error occurs
+     * @param processor processor
+     * @param <A>       return type
+     * @return value determined by processor
+     * @throws IOException if an I/O error occurs
      */
-    public <A> A process(Processor<Entry<K,V>, A> processor) throws IOException {
-        return doWithState(this.<A>process(), P.p(processor, (K)null, Boolean.FALSE, Boolean.FALSE));
+    public <A> A process(Processor<Entry<K, V>, A> processor) throws IOException {
+        return doWithState(this.<A>process(), P.p(processor, (K) null, Boolean.FALSE, Boolean.FALSE));
     }
 
-    public <A> A process(Processor<Entry<K,V>, A> processor, boolean reverse) throws IOException {
-        return doWithState(this.<A>process(), P.p(processor, (K)null, Boolean.FALSE, reverse));
+    public <A> A process(Processor<Entry<K, V>, A> processor, boolean reverse) throws IOException {
+        return doWithState(this.<A>process(), P.p(processor, (K) null, Boolean.FALSE, reverse));
     }
 
-    public <A> A process(Processor<Entry<K,V>, A> processor, K start, boolean inclusive, boolean reverse) throws IOException {
+    public <A> A process(Processor<Entry<K, V>, A> processor, K start, boolean inclusive, boolean reverse) throws IOException {
         return doWithState(this.<A>process(), P.p(processor, start, inclusive, reverse));
     }
 
@@ -713,7 +750,7 @@ public final class Store<K, V> implements Closeable {
         }
     }
 
-    private Stream<Entry<K,V>> stream(final GenerationState<K, V> state, final K start, final boolean inclusive, final boolean reverse) {
+    private Stream<Entry<K, V>> stream(final GenerationState<K, V> state, final K start, final boolean inclusive, final boolean reverse) {
         return Stream.iterableStream(new Iterable<Entry<K, V>>() {
             @Override
             public Iterator<Entry<K, V>> iterator() {
@@ -767,21 +804,21 @@ public final class Store<K, V> implements Closeable {
     }
 
     /**
-     * @return  key comparator
+     * @return key comparator
      */
     public Comparator<K> getComparator() {
         return comparator;
     }
 
     /**
-     * @return  key serializer
+     * @return key serializer
      */
     public Serializer<K> getKeySerializer() {
         return keySerializer;
     }
 
     /**
-     * @return  value serializer
+     * @return value serializer
      */
     public Serializer<V> getValueSerializer() {
         return valueSerializer;
@@ -792,7 +829,7 @@ public final class Store<K, V> implements Closeable {
     }
 
     private File getNextLogFile() throws IOException {
-        return new File(dataDir, getUniqueTimestamp()+".log");
+        return new File(dataDir, getUniqueTimestamp() + ".log");
     }
 
     private File getNextCheckpointDir() throws IOException {
@@ -806,16 +843,16 @@ public final class Store<K, V> implements Closeable {
             time = System.currentTimeMillis();
             lastUsedTime = lastUsedTimeStamp.get();
             if (time <= lastUsedTime) {
-                time = lastUsedTime+1;
+                time = lastUsedTime + 1;
             }
         } while (!lastUsedTimeStamp.compareAndSet(lastUsedTime, time));
         return time;
     }
 
-    private void checkpointGenerationState(GenerationState<K,V> state, File checkpointDir) throws IOException {
+    private void checkpointGenerationState(GenerationState<K, V> state, File checkpointDir) throws IOException {
         final Map<String, Object> map = new HashMap<String, Object>();
         final List<String> stableGenerationNames = new ArrayList<String>();
-        for (Generation<K,V> generation : state.stableGenerations) {
+        for (Generation<K, V> generation : state.stableGenerations) {
             final File generationPath = generation.getPath();
             final String generationName = generationPath.getName();
             stableGenerationNames.add(generationName);
@@ -848,7 +885,7 @@ public final class Store<K, V> implements Closeable {
     /**
      * Close the store, clean up lock files.
      *
-     * @throws IOException  if an I/O error occurs
+     * @throws IOException if an I/O error occurs
      */
     @Override
     public void close() throws IOException {
@@ -867,7 +904,7 @@ public final class Store<K, V> implements Closeable {
     /**
      * Flushes volatile generation to disk.
      *
-     * @throws IOException  if an I/O error occurs
+     * @throws IOException if an I/O error occurs
      */
     public void sync() throws IOException {
         final SharedReference<GenerationState<K, V>> localState = generationState.getCopy();
@@ -895,12 +932,12 @@ public final class Store<K, V> implements Closeable {
         compactor.waitForCompletion();
     }
 
-    private final F2<GenerationState<K,V>,Object,Long> getActiveSpaceUsage = new F2<GenerationState<K, V>, Object, Long>() {
+    private final F2<GenerationState<K, V>, Object, Long> getActiveSpaceUsage = new F2<GenerationState<K, V>, Object, Long>() {
         @Override
         public Long f(final GenerationState<K, V> state, final Object o) {
             try {
                 long spaceUsage = state.volatileGeneration.sizeInBytes();
-                for (Generation<K,V> generation : state.stableGenerations) {
+                for (Generation<K, V> generation : state.stableGenerations) {
                     spaceUsage += generation.sizeInBytes();
                 }
                 return spaceUsage;
@@ -911,8 +948,8 @@ public final class Store<K, V> implements Closeable {
     };
 
     /**
-     * @return              active space in use by all generations, in bytes
-     * @throws IOException  if an I/O error occurs
+     * @return active space in use by all generations, in bytes
+     * @throws IOException if an I/O error occurs
      */
     public long getActiveSpaceUsage() throws IOException {
         return doWithState(getActiveSpaceUsage, null);
@@ -930,23 +967,23 @@ public final class Store<K, V> implements Closeable {
     };
 
     /**
-     * @return              total space in use, in bytes
-     * @throws IOException  if an I/O error occurs
+     * @return total space in use, in bytes
+     * @throws IOException if an I/O error occurs
      */
     public long getTotalSpaceUsage() throws IOException {
         return doWithState(getTotalSpaceUsage, null);
     }
 
     /**
-     * @return              space reserved for compaction, in bytes
+     * @return space reserved for compaction, in bytes
      */
     public long getReservedSpaceUsage() {
         return reservedCompactionSpace.get();
     }
 
     /**
-     * @return              remaining free space in bytes, excluding any space reserved for compaction and the reserved space threshold
-     * @throws IOException  if an I/O error occurs
+     * @return remaining free space in bytes, excluding any space reserved for compaction and the reserved space threshold
+     * @throws IOException if an I/O error occurs
      */
     public long getFreeSpace() throws IOException {
         return getFreeSpace(getReservedSpaceUsage() + reservedSpaceThreshold);
@@ -959,14 +996,16 @@ public final class Store<K, V> implements Closeable {
         return root.getUsableSpace() - reservedSpace + tmpSpace;
     }
 
-    private Generation<K,V> doCompaction(final List<Generation<K, V>> toCompact, boolean hasDeletions)
+    // 在这里真正的doCompaction
+    private Generation<K, V> doCompaction(final List<Generation<K, V>> toCompact, boolean hasDeletions)
             throws IOException {
         long spaceToReserve = 0;
-        for (Generation<K,V> generation : toCompact) {
-            spaceToReserve+=generation.sizeInBytes();
+        for (Generation<K, V> generation : toCompact) {
+            spaceToReserve += generation.sizeInBytes();
         }
         final long reservedSpace = reservedCompactionSpace.addAndGet(spaceToReserve);
         try {
+            // 在这里判断磁盘容量是不是足够
             if (dedicatedPartition && getFreeSpace(reservedSpace + reservedSpaceThreshold) < 0) {
                 throw new IOException("Out of disk space!");
             }
@@ -991,20 +1030,25 @@ public final class Store<K, V> implements Closeable {
         final Set<String> currentlyCompacting = new HashSet<String>();
 
         volatile boolean closed = false;
-        
+
+        // 正在运行的compactions
         volatile int runningCompactions = 0;
 
+        // 进行压缩
         public void compact() throws IOException {
+            // 这里首先会进行加锁
             lock.lock();
             try {
                 if (!closed) {
                     final SharedReference<GenerationState<K, V>> localStateReference = generationState.getCopy();
                     try {
-                        if (localStateReference == null) return;
+                        if (localStateReference == null)
+                            return;
                         final GenerationState<K, V> localState = localStateReference.get();
                         //this is double checked locking but in this case it doesn't really matter since it's just a heuristic
                         if (localState.volatileGeneration.sizeInBytes() > maxVolatileGenerationSize) {
                             final GenerationState<K, V> nextState = startNewLog(localState);
+                            // 在这里开始进行压缩
                             startCompaction(nextState);
                         }
                     } finally {
@@ -1019,15 +1063,15 @@ public final class Store<K, V> implements Closeable {
         private GenerationState<K, V> startNewLog(final GenerationState<K, V> localState) throws IOException {
             //create new volatile generation and checkpoint
             final File newLog = getNextLogFile();
-            final VolatileGeneration<K,V> nextVolatileGeneration = new VolatileGeneration<K, V>(newLog, keySerializer, valueSerializer, comparator);
-            final List<SharedReference<? extends Generation<K,V>>> nextStableGenerations = Lists.newArrayList();
+            final VolatileGeneration<K, V> nextVolatileGeneration = new VolatileGeneration<K, V>(newLog, keySerializer, valueSerializer, comparator);
+            final List<SharedReference<? extends Generation<K, V>>> nextStableGenerations = Lists.newArrayList();
             nextStableGenerations.add(localState.volatileGenerationReference.copy());
             for (SharedReference<? extends Generation<K, V>> reference : localState.stableGenerationReferences) {
                 nextStableGenerations.add(reference.copy());
             }
             final File checkpointDir = getNextCheckpointDir();
             checkpointDir.mkdirs();
-            final GenerationState<K,V> nextState = new GenerationState<K, V>(nextStableGenerations, SharedReference.create(nextVolatileGeneration), checkpointDir);
+            final GenerationState<K, V> nextState = new GenerationState<K, V>(nextStableGenerations, SharedReference.create(nextVolatileGeneration), checkpointDir);
             checkpointGenerationState(nextState, checkpointDir);
             //there will be a brief period of time where there is no writable generation, put and delete will block during this time
             localState.volatileGeneration.closeWriter();
@@ -1038,20 +1082,26 @@ public final class Store<K, V> implements Closeable {
             return nextState;
         }
 
+        // 开始进行压缩
         private void startCompaction(final GenerationState<K, V> localState) throws IOException {
             //find generations eligible for compaction and start compaction in background
-            final List<SharedReference<? extends Generation<K,V>>> toCompact = Lists.newArrayList();
+            // 首先创建一个空的list
+            final List<SharedReference<? extends Generation<K, V>>> toCompact = Lists.newArrayList();
             long sum = 0;
             boolean hasDeletions = false;
+            // 遍历这里面的所有Entry
             for (SharedReference<? extends Generation<K, V>> reference : localState.stableGenerationReferences) {
                 final Generation<K, V> generation = reference.get();
                 final String name = generation.getPath().getName();
+                // 如果正在进行compacting则退出
                 if (!currentlyCompacting.contains(name)) {
-                    if ((generation instanceof VolatileGeneration || (sum*2 > generation.sizeInBytes()))) {
-                        sum+=generation.sizeInBytes();
+                    if ((generation instanceof VolatileGeneration || (sum * 2 > generation.sizeInBytes()))) {
+                        sum += generation.sizeInBytes();
+                        // 把Entry放到toCompact里面
                         toCompact.add(reference.copy());
                         currentlyCompacting.add(generation.getPath().getName());
                     } else {
+                        // TODO @lmj 这个标志位不知道噶啥的。
                         hasDeletions = true;
                         break;
                     }
@@ -1062,17 +1112,19 @@ public final class Store<K, V> implements Closeable {
             }
             if (toCompact.size() > 0) {
                 runningCompactions++;
+                // 启动后台线程来进行compaction
                 threadPool.execute(new Compaction(toCompact, hasDeletions));
             }
         }
 
+        // TODO @lmj 这里为啥没有看到把多个文件合并成一个的方法呢？
         private final class Compaction implements Runnable {
 
-            private final List<SharedReference<? extends Generation<K,V>>> toCompact;
+            private final List<SharedReference<? extends Generation<K, V>>> toCompact;
 
             private final boolean hasDeletions;
 
-            private Compaction(List<SharedReference<? extends Generation<K,V>>> toCompact, boolean hasDeletions) {
+            private Compaction(List<SharedReference<? extends Generation<K, V>>> toCompact, boolean hasDeletions) {
                 this.toCompact = toCompact;
                 this.hasDeletions = hasDeletions;
             }
@@ -1080,16 +1132,19 @@ public final class Store<K, V> implements Closeable {
             @Override
             public void run() {
                 boolean locked = false;
+                // 创建一个set来进行去重
                 final Set<String> compactedGenerations = new HashSet<String>();
                 for (SharedReference<? extends Generation<K, V>> generation : toCompact) {
+                    // 把所有的路径名都放到这个里面
                     compactedGenerations.add(generation.get().getPath().getName());
                 }
                 try {
-                    final List<Generation<K,V>> toCompactGenerations = Lists.newArrayList();
+                    final List<Generation<K, V>> toCompactGenerations = Lists.newArrayList();
                     for (SharedReference<? extends Generation<K, V>> reference : toCompact) {
                         toCompactGenerations.add(reference.get());
                     }
-                    final Generation<K,V> stableGeneration = doCompaction(toCompactGenerations, hasDeletions);
+                    // 在这里进行compaction
+                    final Generation<K, V> stableGeneration = doCompaction(toCompactGenerations, hasDeletions);
                     lock.lock();
                     locked = true;
                     finishCompaction(compactedGenerations, toCompactGenerations, stableGeneration);
@@ -1111,7 +1166,7 @@ public final class Store<K, V> implements Closeable {
                         }
                         runningCompactions--;
                         if (runningCompactions < 0) {
-                            log.error("compactions count is "+runningCompactions+", this is bad.");
+                            log.error("compactions count is " + runningCompactions + ", this is bad.");
                         }
                         if (closed) {
                             if (runningCompactions == 0) {
@@ -1130,9 +1185,9 @@ public final class Store<K, V> implements Closeable {
             }
 
             private void finishCompaction(final Set<String> compactedGenerations, final List<Generation<K, V>> toCompactGenerations, final Generation<K, V> stableGeneration) throws IOException {
-                final List<SharedReference<? extends Generation<K,V>>> nextStableGenerations = Lists.newArrayList();
+                final List<SharedReference<? extends Generation<K, V>>> nextStableGenerations = Lists.newArrayList();
                 final SharedReference<GenerationState<K, V>> stateReference = Preconditions.checkNotNull(generationState.getCopy());
-                final GenerationState<K,V> state = stateReference.get();
+                final GenerationState<K, V> state = stateReference.get();
                 try {
                     boolean compactionAdded = false;
                     for (SharedReference<? extends Generation<K, V>> reference : state.stableGenerationReferences) {
@@ -1149,7 +1204,7 @@ public final class Store<K, V> implements Closeable {
                     }
                     final File checkpointDir = getNextCheckpointDir();
                     checkpointDir.mkdirs();
-                    final GenerationState<K,V> nextState = new GenerationState<K, V>(nextStableGenerations, state.volatileGenerationReference.copy(), checkpointDir);
+                    final GenerationState<K, V> nextState = new GenerationState<K, V>(nextStableGenerations, state.volatileGenerationReference.copy(), checkpointDir);
                     checkpointGenerationState(nextState, checkpointDir);
                     PosixFileOperations.atomicLink(checkpointDir, new File(root, "latest"));
                     final SharedReference<GenerationState<K, V>> oldState = Preconditions.checkNotNull(generationState.getAndSet(nextState));
@@ -1211,11 +1266,12 @@ public final class Store<K, V> implements Closeable {
         }
     }
 
+    // TODO @lmj generation state是啥意思？这部分代码没看懂。这里是存放所有的数据的吗?
     private static final class GenerationState<K, V> implements Closeable {
-        private final List<SharedReference<? extends Generation<K,V>>> stableGenerationReferences;
-        private final SharedReference<VolatileGeneration<K,V>> volatileGenerationReference;
+        private final List<SharedReference<? extends Generation<K, V>>> stableGenerationReferences;
+        private final SharedReference<VolatileGeneration<K, V>> volatileGenerationReference;
         private final List<Generation<K, V>> stableGenerations;
-        private final VolatileGeneration<K,V> volatileGeneration;
+        private final VolatileGeneration<K, V> volatileGeneration;
 
         private final File path;
 
@@ -1228,7 +1284,7 @@ public final class Store<K, V> implements Closeable {
             this.stableGenerationReferences = ImmutableList.copyOf(stableGenerationReferences);
             this.volatileGenerationReference = volatileGenerationReference;
             this.volatileGeneration = volatileGenerationReference.get();
-            final ImmutableList.Builder<Generation<K,V>> builder = ImmutableList.builder();
+            final ImmutableList.Builder<Generation<K, V>> builder = ImmutableList.builder();
             for (SharedReference<? extends Generation<K, V>> generation : stableGenerationReferences) {
                 builder.add(generation.get());
             }
@@ -1236,7 +1292,7 @@ public final class Store<K, V> implements Closeable {
         }
 
         public void delete() throws IOException {
-            log.info("deleting "+path);
+            log.info("deleting " + path);
             PosixFileOperations.rmrf(path);
         }
 
@@ -1252,10 +1308,10 @@ public final class Store<K, V> implements Closeable {
     /**
      * A key/value pair.
      *
-     * @param <K>   key type
-     * @param <V>   value type
+     * @param <K> key type
+     * @param <V> value type
      */
-    public static final class Entry<K,V> {
+    public static final class Entry<K, V> {
         private final K key;
         private final V value;
 

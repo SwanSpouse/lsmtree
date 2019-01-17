@@ -16,6 +16,7 @@
 /**
  * @author jplaisance
  */
+// 存储格式类型 Inline 和 compressed 压缩
 public enum StorageType {
     INLINE,
     BLOCK_COMPRESSED

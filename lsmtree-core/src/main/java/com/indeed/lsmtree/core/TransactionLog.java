@@ -11,7 +11,7 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
- package com.indeed.lsmtree.core;
+package com.indeed.lsmtree.core;
 
 import com.google.common.io.Closer;
 import com.indeed.util.serialization.Serializer;
@@ -36,7 +36,7 @@ public final class TransactionLog {
     public static class Reader<K, V> implements Closeable {
 
         private final BasicRecordFile<OpKeyValue<K, V>> recordFile;
-        private final RecordFile.Reader<OpKeyValue<K,V>> reader;
+        private final RecordFile.Reader<OpKeyValue<K, V>> reader;
         private boolean done;
         private TransactionType type;
         private K key;
@@ -59,7 +59,7 @@ public final class TransactionLog {
                 done = true;
                 return false;
             }
-            final OpKeyValue<K,V> opKeyValue = reader.get();
+            final OpKeyValue<K, V> opKeyValue = reader.get();
             type = opKeyValue.type;
             key = opKeyValue.key;
             if (type == TransactionType.PUT) {
@@ -106,11 +106,13 @@ public final class TransactionLog {
             writer = new BasicRecordFile.Writer(file, new OpKeyValueSerialzer(keySerializer, valueSerializer));
         }
 
+        // 将key value写入到文件中
         public synchronized void put(K key, V value) throws IOException, LogClosedException {
             if (isClosed) {
                 throw new LogClosedException();
             }
             try {
+                // 先写文件，然后进行同步，写log的时候是直接append就好了。
                 sizeInBytes = writer.append(new OpKeyValue<K, V>(TransactionType.PUT, key, value));
                 if (sync) {
                     writer.sync();
@@ -121,6 +123,7 @@ public final class TransactionLog {
             }
         }
 
+        // 将Key从文件中删除，其实也不是删除，就是再添加一个
         public synchronized void delete(K key) throws IOException, LogClosedException {
             if (isClosed) {
                 throw new LogClosedException();
@@ -138,6 +141,7 @@ public final class TransactionLog {
 
         /**
          * Try to clean up all this crap, if any of it throws an exception then rethrow one of them at the end.
+         *
          * @throws IOException
          */
         public synchronized void close() throws IOException {
@@ -189,14 +193,17 @@ public final class TransactionLog {
         }
 
         public static TransactionType getTransactionType(int transactionTypeId) {
-            switch(transactionTypeId) {
-                case 1 : return PUT;
-                case 2 : return DELETE;
-                default : throw new IllegalArgumentException(transactionTypeId+" is not a valid transactionTypeId");
+            switch (transactionTypeId) {
+                case 1:
+                    return PUT;
+                case 2:
+                    return DELETE;
+                default:
+                    throw new IllegalArgumentException(transactionTypeId + " is not a valid transactionTypeId");
             }
         }
     }
-    
+
     private static final class OpKeyValue<K, V> {
         TransactionType type;
         K key;
@@ -208,9 +215,9 @@ public final class TransactionLog {
             this.value = value;
         }
     }
-    
-    private static final class OpKeyValueSerialzer<K,V> implements Serializer<OpKeyValue<K,V>> {
-        
+
+    private static final class OpKeyValueSerialzer<K, V> implements Serializer<OpKeyValue<K, V>> {
+
         Serializer<K> keySerializer;
         Serializer<V> valueSerializer;
 
@@ -223,7 +230,7 @@ public final class TransactionLog {
         public void write(OpKeyValue<K, V> kvOpKeyValue, DataOutput out) throws IOException {
             out.writeByte(kvOpKeyValue.type.getTransactionTypeId());
             keySerializer.write(kvOpKeyValue.key, out);
-            if (kvOpKeyValue.type ==TransactionType.PUT) {
+            if (kvOpKeyValue.type == TransactionType.PUT) {
                 valueSerializer.write(kvOpKeyValue.value, out);
             }
         }
@@ -240,5 +247,6 @@ public final class TransactionLog {
         }
     }
 
-    public static class LogClosedException extends Exception {}
+    public static class LogClosedException extends Exception {
+    }
 }

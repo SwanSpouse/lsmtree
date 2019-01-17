@@ -1,5 +1,11 @@
 # Indeed LSM Tree
 
+## 关于
+
+copy from https://github.com/indeedeng/lsmtree
+
+学习中，在上述项目的基础之上加上自己的理解。
+
 ## About
 
 Indeed LSM Tree is a fast key/value store that is efficient for high-volume random access reads and writes.

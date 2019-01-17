@@ -338,7 +338,7 @@ public final class StableGeneration {
 
     public static class Writer {
 
-        public static <K,V> void write(BloomFilter.MemoryManager memoryManager, File path, final List<Generation<K,V>> generations, Serializer<K> keySerializer, final Serializer<V> valueSerializer, Comparator<K> keyComparator, StorageType storageType, CompressionCodec codec, boolean hasDeletions)
+        public static <K, V> void write(BloomFilter.MemoryManager memoryManager, File path, final List<Generation<K, V>> generations, Serializer<K> keySerializer, final Serializer<V> valueSerializer, Comparator<K> keyComparator, StorageType storageType, CompressionCodec codec, boolean hasDeletions)
                 throws IOException {
             write(memoryManager, path, generations, keySerializer, valueSerializer, keyComparator, storageType, codec, hasDeletions, true);
         }

@@ -164,6 +164,7 @@ public final class BasicRecordFile<E> implements RecordFile<E> {
             out = new BufferedFileDataOutputStream(file, ByteOrder.BIG_ENDIAN, 65536);
         }
 
+        // 具体的写文件实现，会添加一些校验和
         @Override
         public long append(final E entry) throws IOException {
             UnsafeByteArrayOutputStream bytes = new UnsafeByteArrayOutputStream();

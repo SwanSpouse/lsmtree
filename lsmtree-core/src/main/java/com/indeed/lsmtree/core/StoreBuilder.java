@@ -43,6 +43,7 @@ public final class StoreBuilder<K,V> {
     private boolean mlockBloomFilters = false;
     private long bloomFilterMemory = 1024*1024*32;
 
+    // 类似于创建一个数据库
     public StoreBuilder(final File root, final Serializer<K> keySerializer, final Serializer<V> valueSerializer) {
         this.root = root;
         this.keySerializer = keySerializer;

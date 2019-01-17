@@ -11,7 +11,7 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
- package com.indeed.lsmtree.core;
+package com.indeed.lsmtree.core;
 
 import com.indeed.util.compress.CompressionCodec;
 import com.indeed.util.compress.SnappyCodec;
@@ -31,8 +31,8 @@ import java.util.Random;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
-* @author jplaisance
-*/
+ * @author jplaisance
+ */
 public final class TestStore extends TestCase {
 
     private static final Logger log = Logger.getLogger(TestStore.class);
@@ -58,29 +58,36 @@ public final class TestStore extends TestCase {
         FileUtils.deleteDirectory(tmpDir);
     }
 
+    // 测试inline存储方式
     public void testInline() throws Exception {
         testStore(StorageType.INLINE, null);
     }
 
+    // 测试compressed存储方式
     public void testBlockCompressed() throws Exception {
         final SnappyCodec codec = new SnappyCodec();
         testStore(StorageType.BLOCK_COMPRESSED, codec);
     }
 
+    // 测试存储
     public void testStore(StorageType storageType, CompressionCodec codec) throws Exception {
         File indexDir = new File(tmpDir, "index");
         indexDir.mkdirs();
         File indexLink = new File(tmpDir, "indexlink");
         PosixFileOperations.link(indexDir, indexLink);
         File storeDir = new File(indexLink, "store");
-        Store<Integer, Long> store = new StoreBuilder<Integer, Long>(storeDir, new IntSerializer(), new LongSerializer()).setMaxVolatileGenerationSize(8*1024*1024).setStorageType(storageType).setCodec(codec).build();
+        // 构造一个数据库
+        Store<Integer, Long> store = new StoreBuilder<Integer, Long>(storeDir, new IntSerializer(), new LongSerializer()).setMaxVolatileGenerationSize(8 * 1024 * 1024).setStorageType(storageType).setCodec(codec).build();
+        // 随机生成一个数组
         final Random r = new Random(0);
         final int[] ints = new int[treeSize];
         for (int i = 0; i < ints.length; i++) {
             ints[i] = r.nextInt();
         }
+
+        // 首先把数据都放到数据库里面，然后再验证是否放进去了。
         for (final int i : ints) {
-            store.put(i, (long)i);
+            store.put(i, (long) i);
             assertTrue(store.get(i) == i);
         }
         for (final int i : ints) {
@@ -88,7 +95,7 @@ public final class TestStore extends TestCase {
         }
         store.close();
         store.waitForCompactions();
-        store = new StoreBuilder<Integer, Long>(storeDir, new IntSerializer(), new LongSerializer()).setMaxVolatileGenerationSize(8*1024*1024).setStorageType(storageType).setCodec(codec).build();
+        store = new StoreBuilder<Integer, Long>(storeDir, new IntSerializer(), new LongSerializer()).setMaxVolatileGenerationSize(8 * 1024 * 1024).setStorageType(storageType).setCodec(codec).build();
         Arrays.sort(ints);
         Iterator<Store.Entry<Integer, Long>> iterator = store.iterator();
         int index = 0;
@@ -103,17 +110,17 @@ public final class TestStore extends TestCase {
         }
         assertTrue(index == ints.length);
         final BitSet deleted = new BitSet();
-        for (int i = 0; i < ints.length/10; i++) {
+        for (int i = 0; i < ints.length / 10; i++) {
             int deletionIndex = r.nextInt(ints.length);
             deleted.set(deletionIndex, true);
-            for (int j = deletionIndex-1; j >= 0; j--) {
+            for (int j = deletionIndex - 1; j >= 0; j--) {
                 if (ints[j] == ints[deletionIndex]) {
                     deleted.set(j, true);
                 } else {
                     break;
                 }
             }
-            for (int j = deletionIndex+1; j < ints.length; j++) {
+            for (int j = deletionIndex + 1; j < ints.length; j++) {
                 if (ints[j] == ints[deletionIndex]) {
                     deleted.set(j, true);
                 } else {
@@ -137,7 +144,7 @@ public final class TestStore extends TestCase {
         }
         while (deleted.get(index)) index++;
         assertTrue(index == ints.length);
-        final int max = ints[ints.length-1];
+        final int max = ints[ints.length - 1];
         final AtomicInteger done = new AtomicInteger(8);
         for (int i = 0; i < done.get(); i++) {
             final int thread = i;
@@ -169,8 +176,8 @@ public final class TestStore extends TestCase {
                                         int nextIndex = ~insertionindex;
                                         while (deleted.get(nextIndex) && nextIndex < ints.length) nextIndex++;
                                         if (nextIndex < ints.length) {
-                                            if (insertionindex != -1) assertTrue(ints[(~insertionindex)-1] < rand);
-                                            assertTrue(ints[nextIndex]+" != "+next.getKey(), ints[nextIndex] == next.getKey());
+                                            if (insertionindex != -1) assertTrue(ints[(~insertionindex) - 1] < rand);
+                                            assertTrue(ints[nextIndex] + " != " + next.getKey(), ints[nextIndex] == next.getKey());
 
                                         }
                                         Long result = finalStore.get(rand);
