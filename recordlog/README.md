@@ -3,7 +3,7 @@
 ## About
 Recordlog is a library for reading and writing data to record logs. Many records are stored together in a `RecordFile`.
 
-Recordlog 用来读取record logs 数据。 records 数据都存放在 RecordFile 中
+Recordlog 是用来读写record log数据的包。 records 数据都存放在 RecordFile 中
 
 ## API Documentation
 `RecordFile` is a generic interface for a collection of byte arrays to be addressed by 64 bit pointers.
