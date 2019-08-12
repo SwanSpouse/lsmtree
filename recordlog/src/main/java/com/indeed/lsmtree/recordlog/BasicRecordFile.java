@@ -11,7 +11,7 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
- package com.indeed.lsmtree.recordlog;
+package com.indeed.lsmtree.recordlog;
 
 import com.google.common.io.ByteStreams;
 import com.google.common.primitives.Ints;
@@ -43,7 +43,7 @@ public final class BasicRecordFile<E> implements RecordFile<E> {
     private static final Logger log = Logger.getLogger(BasicRecordFile.class);
 
     final MMapBuffer buffer;
-    
+
     final Memory memory;
 
     private final File file;
@@ -65,7 +65,8 @@ public final class BasicRecordFile<E> implements RecordFile<E> {
     @Override
     public E get(long address) throws IOException {
         Option<E> option = readAndCheck(address, null);
-        if (option.isNone()) throw new IOException("there is not a valid record at address "+address+" in file "+file.getAbsolutePath());
+        if (option.isNone())
+            throw new IOException("there is not a valid record at address " + address + " in file " + file.getAbsolutePath());
         return option.some();
     }
 
@@ -81,7 +82,7 @@ public final class BasicRecordFile<E> implements RecordFile<E> {
 
     private Option<E> readAndCheck(long address, MutableLong nextElementStart) throws IOException {
         // [0,1,2,3] 4个byte是总长度
-        if (address+4 > memory.length()) {
+        if (address + 4 > memory.length()) {
             throw new ConsistencyException("not enough bytes in file");
         }
         final int length = memory.getInt(address);
@@ -89,39 +90,39 @@ public final class BasicRecordFile<E> implements RecordFile<E> {
             return Option.none();
         }
         // [5,6,7,8] 4个byte是checksum
-        if (address+8 > memory.length()) {
+        if (address + 8 > memory.length()) {
             throw new ConsistencyException("not enough bytes in file");
         }
         // 查看数据是否超出了范围
-        if (address+8+length > memory.length()) {
+        if (address + 8 + length > memory.length()) {
             throw new ConsistencyException("not enough bytes in file");
         }
         // 获取checksum
-        final int checksum = memory.getInt(address+4);
+        final int checksum = memory.getInt(address + 4);
 
         MemoryDataInput in = new MemoryDataInput(memory);
-        in.seek(address+8);
+        in.seek(address + 8);
         CRC32 crc32 = new CRC32();
         crc32.update(CRC_SEED);
         byte[] bytes = new byte[length];
         in.readFully(bytes);
         // 计算并验证checksum
         crc32.update(bytes);
-        if ((int)crc32.getValue() != checksum) {
-            throw new ConsistencyException("checksum for record does not match: expected "+checksum+" actual "+(int)crc32.getValue());
+        if ((int) crc32.getValue() != checksum) {
+            throw new ConsistencyException("checksum for record does not match: expected " + checksum + " actual " + (int) crc32.getValue());
         }
 
         // TODO 最后这里在搞啥，没看懂
         E ret = serializer.read(ByteStreams.newDataInput(bytes));
-        if (nextElementStart != null) nextElementStart.setValue(address+8+length);
+        if (nextElementStart != null) nextElementStart.setValue(address + 8 + length);
         return Option.some(ret);
     }
 
     private final class Reader implements RecordFile.Reader<E> {
-        MutableLong position;
-        E e;
+        MutableLong position;  // 当前位置
+        E e; // 当前位置的数据
 
-        boolean done = false;
+        boolean done = false; // 标记当前文件是否读完
 
         private Reader() {
             this(0);
@@ -134,6 +135,7 @@ public final class BasicRecordFile<E> implements RecordFile<E> {
         @Override
         public boolean next() throws IOException {
             try {
+                // 从当前位置往后读
                 Option<E> option = readAndCheck(position.longValue(), position);
                 if (option.isNone()) {
                     done = true;
@@ -142,7 +144,7 @@ public final class BasicRecordFile<E> implements RecordFile<E> {
                 e = option.some();
             } catch (ConsistencyException e) {
                 done = true;
-                log.warn("reading next record in "+file.getAbsolutePath()+" failed with exception", e);
+                log.warn("reading next record in " + file.getAbsolutePath() + " failed with exception", e);
                 return false;
             }
             return true;
@@ -159,7 +161,8 @@ public final class BasicRecordFile<E> implements RecordFile<E> {
         }
 
         @Override
-        public void close() throws IOException {}
+        public void close() throws IOException {
+        }
     }
 
     public static final class Writer<E> implements RecordFile.Writer<E> {
@@ -176,20 +179,29 @@ public final class BasicRecordFile<E> implements RecordFile<E> {
         @Override
         public long append(final E entry) throws IOException {
             UnsafeByteArrayOutputStream bytes = new UnsafeByteArrayOutputStream();
+            // 首先进行序列化
             serializer.write(entry, new DataOutputStream(bytes));
+            // 获取写的位置
             final long start = out.position();
+            // 首先写入数据长度
             out.writeInt(bytes.size());
+            // 获取checksum
             final CRC32 checksum = new CRC32();
             checksum.update(CRC_SEED);
             checksum.update(bytes.getByteArray(), 0, bytes.size());
-            out.writeInt((int)checksum.getValue());
+            // 写入checksum
+            out.writeInt((int) checksum.getValue());
+            // 写入data
             out.write(bytes.getByteArray(), 0, bytes.size());
+            // 同时返回写入的位置
             return start;
         }
 
         @Override
         public void close() throws IOException {
+            // 写入结尾
             out.writeInt(-1);
+            // flush 文件
             out.sync();
             out.close();
         }

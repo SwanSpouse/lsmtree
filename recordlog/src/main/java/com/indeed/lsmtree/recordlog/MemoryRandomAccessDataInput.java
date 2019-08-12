@@ -11,7 +11,7 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
- package com.indeed.lsmtree.recordlog;
+package com.indeed.lsmtree.recordlog;
 
 import com.indeed.util.io.RandomAccessDataInput;
 import com.indeed.util.mmap.Memory;
@@ -120,5 +120,6 @@ public final class MemoryRandomAccessDataInput implements RandomAccessDataInput 
         return dataInput.length();
     }
 
-    public void close() throws IOException {}
+    public void close() throws IOException {
+    }
 }

@@ -11,7 +11,7 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
- package com.indeed.lsmtree.recordlog;
+package com.indeed.lsmtree.recordlog;
 
 import com.google.common.collect.Lists;
 import com.indeed.util.core.io.Closeables2;
@@ -67,19 +67,19 @@ public class GenericRecordLogDirectoryPoller<T> implements Runnable, Closeable {
     }
 
     public GenericRecordLogDirectoryPoller(
-                RecordLogDirectory<T> recordLogDirectory,
-                Checkpointer<Long> checkpointer,
-                boolean loop,
-                boolean gc) throws IOException {
+            RecordLogDirectory<T> recordLogDirectory,
+            Checkpointer<Long> checkpointer,
+            boolean loop,
+            boolean gc) throws IOException {
         this(recordLogDirectory, checkpointer, loop, gc, false);
     }
 
     /**
-     * @param recordLogDirectory    record log directory
-     * @param checkpointer          checkpointer used to track last known good position
-     * @param loop                  if true, continually check for new record logs
-     * @param gc                    if true, delete record logs up to (excluding) the last processed record log
-     * @param skipFirst             if true, skip the first entry, which will be the last entry added from previous run
+     * @param recordLogDirectory record log directory
+     * @param checkpointer       checkpointer used to track last known good position
+     * @param loop               if true, continually check for new record logs
+     * @param gc                 if true, delete record logs up to (excluding) the last processed record log
+     * @param skipFirst          if true, skip the first entry, which will be the last entry added from previous run
      * @throws IOException
      */
     public GenericRecordLogDirectoryPoller(
@@ -117,7 +117,7 @@ public class GenericRecordLogDirectoryPoller<T> implements Runnable, Closeable {
 
     /**
      * Polls for new record logs.
-     *
+     * <p>
      * This will block and should not be called directly unless loop was set to false.
      * If setting loop to true use {@link #start} instead.
      */
@@ -253,7 +253,7 @@ public class GenericRecordLogDirectoryPoller<T> implements Runnable, Closeable {
     }
 
     /**
-     * @return  true if a background poller thread is running
+     * @return true if a background poller thread is running
      */
     public boolean isAlive() {
         return pollerThread.isAlive();

@@ -11,7 +11,7 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
- package com.indeed.lsmtree.recordlog;
+package com.indeed.lsmtree.recordlog;
 
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
@@ -113,7 +113,7 @@ public final class RecordLogDirectory<E> implements RecordFile<E> {
             this.blockSize = blockSize;
             this.recordIndexBits = recordIndexBits;
             this.padBits = padBits;
-            segmentShift = 64-fileIndexBits;
+            segmentShift = 64 - fileIndexBits;
             this.tmpPath = new File(file, "tmp");
             this.rollFrequency = rollFrequency;
             tmpPath.mkdirs();
@@ -121,26 +121,26 @@ public final class RecordLogDirectory<E> implements RecordFile<E> {
                 currentSegmentNum = getMaxSegmentNum(path);
                 if (currentSegmentNum == -1 || verifySegmentIntegrity(path, currentSegmentNum)) currentSegmentNum++;
             } else {
-                currentSegmentNum = maxSegment+1;
+                currentSegmentNum = maxSegment + 1;
             }
-            log.info("current segment num: "+currentSegmentNum);
+            log.info("current segment num: " + currentSegmentNum);
             currentWriter = createWriter(currentSegmentNum);
             lastRollTime = System.currentTimeMillis();
         }
 
         private RecordFile.Writer createWriter(int segmentNum) throws IOException {
-            currentWriterPath = new File(tmpPath, String.valueOf(segmentNum)+".rec");
+            currentWriterPath = new File(tmpPath, String.valueOf(segmentNum) + ".rec");
             return BlockCompressedRecordFile.Writer.open(currentWriterPath, serializer, codec, blockSize, recordIndexBits, padBits);
         }
 
         @Override
         public long append(final E entry) throws IOException {
-            if (System.currentTimeMillis()-lastRollTime > rollFrequency) {
+            if (System.currentTimeMillis() - lastRollTime > rollFrequency) {
                 roll();
             }
             final long writerAddress = currentWriter.append(entry);
-            if (writerAddress >= 1L<< segmentShift) throw new IOException("current writer has exceeded maximum size");
-            return (((long)currentSegmentNum)<< segmentShift)+writerAddress;
+            if (writerAddress >= 1L << segmentShift) throw new IOException("current writer has exceeded maximum size");
+            return (((long) currentSegmentNum) << segmentShift) + writerAddress;
         }
 
         public void roll() throws IOException {
@@ -344,17 +344,17 @@ public final class RecordLogDirectory<E> implements RecordFile<E> {
         this.fileIndexBits = fileIndexBits;
         this.recordIndexBits = recordIndexBits;
         this.padBits = padBits;
-        segmentShift = 64-fileIndexBits;
-        segmentMask = (1L<< segmentShift)-1;
+        segmentShift = 64 - fileIndexBits;
+        segmentMask = (1L << segmentShift) - 1;
         fileCache = new FileCache(mlockFiles);
     }
 
     @Override
     public E get(long address) throws IOException {
-        final int segmentNum = (int)(address>>> segmentShift);
+        final int segmentNum = (int) (address >>> segmentShift);
         final Option<SharedReference<BlockCompressedRecordFile<E>>> option = fileCache.get(segmentNum);
         if (option.isNone()) {
-            throw new IOException("address is invalid: "+address);
+            throw new IOException("address is invalid: " + address);
         }
         final SharedReference<BlockCompressedRecordFile<E>> reference = option.some();
         final E ret;
@@ -388,8 +388,8 @@ public final class RecordLogDirectory<E> implements RecordFile<E> {
         }
         return Option.<RecordFile.Reader<E>>some(new RecordFile.Reader<E>() {
 
-            final long segmentShift = 64-fileIndexBits;
-            final long maxSegmentPosition = (1L << segmentShift)-1;
+            final long segmentShift = 64 - fileIndexBits;
+            final long maxSegmentPosition = (1L << segmentShift) - 1;
 
             @Override
             public boolean next() throws IOException {
@@ -400,9 +400,9 @@ public final class RecordLogDirectory<E> implements RecordFile<E> {
             public long getPosition() {
                 final long segmentPosition = segmentReader.getPosition();
                 if (segmentPosition > maxSegmentPosition) {
-                    throw new IllegalStateException("position in segment file"+segmentNum+" is too high to be addressable in record log directory with "+fileIndexBits+" file index bits");
+                    throw new IllegalStateException("position in segment file" + segmentNum + " is too high to be addressable in record log directory with " + fileIndexBits + " file index bits");
                 }
-                return (segmentNum<<segmentShift)+segmentPosition;
+                return (segmentNum << segmentShift) + segmentPosition;
             }
 
             @Override
@@ -418,7 +418,7 @@ public final class RecordLogDirectory<E> implements RecordFile<E> {
     }
 
     public void garbageCollect(final long address) {
-        int segmentNum = getSegmentNum(address)-1;
+        int segmentNum = getSegmentNum(address) - 1;
         final List<File> filesToDelete = Lists.newArrayList();
         while (segmentNum >= 0) {
             final File f = getSegmentPath(dir, segmentNum);
@@ -429,7 +429,7 @@ public final class RecordLogDirectory<E> implements RecordFile<E> {
                 break;
             }
         }
-        for (int i = filesToDelete.size()-1; i >= 0; i--) {
+        for (int i = filesToDelete.size() - 1; i >= 0; i--) {
             filesToDelete.get(i).delete();
         }
     }
@@ -440,11 +440,11 @@ public final class RecordLogDirectory<E> implements RecordFile<E> {
     }
 
     public int getSegmentNum(long address) {
-        return (int) (address >>> (64-fileIndexBits));
+        return (int) (address >>> (64 - fileIndexBits));
     }
 
     public long getAddress(long segNum) {
-        return segNum << (64-fileIndexBits);
+        return segNum << (64 - fileIndexBits);
     }
 
     public int getMaxSegmentNum() throws IOException {
@@ -463,13 +463,14 @@ public final class RecordLogDirectory<E> implements RecordFile<E> {
 
         private boolean done = false;
 
-        private Reader() throws IOException {}
+        private Reader() throws IOException {
+        }
 
         public Reader(long address) throws IOException {
-            currentSegmentNum = (int)(address>>> segmentShift);
+            currentSegmentNum = (int) (address >>> segmentShift);
             final Option<SharedReference<BlockCompressedRecordFile<E>>> recordFile = fileCache.get(currentSegmentNum);
             if (recordFile.isNone()) {
-                throw new IOException("address is invalid: "+address);
+                throw new IOException("address is invalid: " + address);
             }
             final SharedReference<BlockCompressedRecordFile<E>> reference = recordFile.some();
             try {
@@ -489,7 +490,7 @@ public final class RecordLogDirectory<E> implements RecordFile<E> {
                 }
             }
             while (!currentReader.next()) {
-                if (!getSegmentReader(currentSegmentNum+1)) {
+                if (!getSegmentReader(currentSegmentNum + 1)) {
                     done = true;
                     return false;
                 }
@@ -500,7 +501,7 @@ public final class RecordLogDirectory<E> implements RecordFile<E> {
 
         @Override
         public long getPosition() {
-            return (((long)currentSegmentNum)<< segmentShift)+currentReader.getPosition();
+            return (((long) currentSegmentNum) << segmentShift) + currentReader.getPosition();
         }
 
         @Override
@@ -530,11 +531,11 @@ public final class RecordLogDirectory<E> implements RecordFile<E> {
 
     public static File getSegmentPath(File file, int segmentNum, boolean mkDirs) {
         File segmentDir = file;
-        for (int divisor = 1000000; divisor > 1; divisor/=1000) {
-            segmentDir = new File(segmentDir, String.format("%03d", (segmentNum/divisor)%1000));
+        for (int divisor = 1000000; divisor > 1; divisor /= 1000) {
+            segmentDir = new File(segmentDir, String.format("%03d", (segmentNum / divisor) % 1000));
         }
         if (mkDirs) segmentDir.mkdirs();
-        return new File(segmentDir, String.format("%09d", segmentNum)+".rec");
+        return new File(segmentDir, String.format("%09d", segmentNum) + ".rec");
     }
 
     public static int getMaxSegmentNum(File path) throws IOException {
@@ -547,7 +548,7 @@ public final class RecordLogDirectory<E> implements RecordFile<E> {
                     final int dirNum = Integer.parseInt(name);
                     if (dirNum > maxDir) maxDir = dirNum;
                 } else if (name.matches("\\d+\\.rec")) {
-                    final int segmentNum = Integer.parseInt(name.substring(0, name.length()-4));
+                    final int segmentNum = Integer.parseInt(name.substring(0, name.length() - 4));
                     if (segmentNum > maxSegmentNum) maxSegmentNum = segmentNum;
                 }
             }
@@ -567,7 +568,7 @@ public final class RecordLogDirectory<E> implements RecordFile<E> {
                     final int dirNum = Integer.parseInt(name);
                     if (dirNum < minDir) minDir = dirNum;
                 } else if (name.matches("\\d+\\.rec")) {
-                    final int segmentNum = Integer.parseInt(name.substring(0, name.length()-4));
+                    final int segmentNum = Integer.parseInt(name.substring(0, name.length() - 4));
                     if (segmentNum < minSegmentNum) minSegmentNum = segmentNum;
                 }
             }
@@ -626,10 +627,10 @@ public final class RecordLogDirectory<E> implements RecordFile<E> {
                                     .setPadBits(padBits)
                                     .setMlockFiles(mlockFiles)
                                     .build();
-                    log.debug("segment open time: "+(System.nanoTime()-start)/1000d+" us");
+                    log.debug("segment open time: " + (System.nanoTime() - start) / 1000d + " us");
                     return Option.some(SharedReference.create(recordFile));
                 } catch (IOException e) {
-                    log.error("error opening file with segment number "+segmentNum, e);
+                    log.error("error opening file with segment number " + segmentNum, e);
                     return Option.none();
                 }
             }
