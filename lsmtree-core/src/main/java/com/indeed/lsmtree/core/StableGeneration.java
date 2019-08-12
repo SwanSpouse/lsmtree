@@ -11,7 +11,7 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
- package com.indeed.lsmtree.core;
+package com.indeed.lsmtree.core;
 
 import com.google.common.base.Function;
 import com.google.common.collect.Lists;
@@ -39,27 +39,28 @@ public final class StableGeneration {
 
     private static final Logger log = Logger.getLogger(StableGeneration.class);
 
-    public static <K,V> Generation<K,V> open(BloomFilter.MemoryManager memoryManager, File file, Comparator<K> comparator, Serializer<K> keySerializer, Serializer<V> valueSerializer, StorageType storageType, CompressionCodec codec, final boolean mlockBTree)
+    public static <K, V> Generation<K, V> open(BloomFilter.MemoryManager memoryManager, File file, Comparator<K> comparator, Serializer<K> keySerializer, Serializer<V> valueSerializer, StorageType storageType, CompressionCodec codec, final boolean mlockBTree)
             throws IOException {
-        if (storageType == StorageType.BLOCK_COMPRESSED && codec == null) throw new IllegalArgumentException("codec must be set if block compressed");
+        if (storageType == StorageType.BLOCK_COMPRESSED && codec == null)
+            throw new IllegalArgumentException("codec must be set if block compressed");
         if (storageType == StorageType.INLINE) {
             return new InlineStableGeneration<K, V>(memoryManager, file, comparator, keySerializer, valueSerializer, mlockBTree);
         } else if (storageType == StorageType.BLOCK_COMPRESSED) {
             return new BlockCompressedStableGeneration<K, V>(memoryManager, file, comparator, keySerializer, valueSerializer, codec, mlockBTree);
         } else {
-            throw new IllegalArgumentException(storageType+" is not a valid storage type");
+            throw new IllegalArgumentException(storageType + " is not a valid storage type");
         }
     }
 
-    public static class InlineStableGeneration<K,V> implements Generation<K, V> {
+    public static class InlineStableGeneration<K, V> implements Generation<K, V> {
 
         private final BloomFilter.Reader bloomFilter;
 
-        private final ImmutableBTreeIndex.Reader<K,V> reader;
+        private final ImmutableBTreeIndex.Reader<K, V> reader;
 
         private final File file;
 
-        public InlineStableGeneration(BloomFilter.MemoryManager memoryManager, File file, Comparator<K> comparator,  Serializer<K> keySerializer, Serializer<V> valueSerializer, final boolean mlockBTree) throws IOException {
+        public InlineStableGeneration(BloomFilter.MemoryManager memoryManager, File file, Comparator<K> comparator, Serializer<K> keySerializer, Serializer<V> valueSerializer, final boolean mlockBTree) throws IOException {
             this.file = file;
             reader = new ImmutableBTreeIndex.Reader(file, comparator, keySerializer, valueSerializer, mlockBTree);
             final File bloomFilterFile = new File(file, "bloomfilter.bin");
@@ -79,7 +80,8 @@ public final class StableGeneration {
         }
 
         @Override
-        public @Nullable Boolean isDeleted(final K key) {
+        public @Nullable
+        Boolean isDeleted(final K key) {
             final Entry<K, V> entry = get(key);
             return entry == null ? null : (entry.isDeleted() ? Boolean.TRUE : Boolean.FALSE);
         }
@@ -136,7 +138,7 @@ public final class StableGeneration {
 
         @Override
         public long sizeInBytes() {
-            return reader.sizeInBytes()+(bloomFilter == null ? 0 : bloomFilter.sizeInBytes());
+            return reader.sizeInBytes() + (bloomFilter == null ? 0 : bloomFilter.sizeInBytes());
         }
 
         @Override
@@ -167,11 +169,11 @@ public final class StableGeneration {
         }
     }
 
-    public static class BlockCompressedStableGeneration<K,V> implements Generation<K, V> {
+    public static class BlockCompressedStableGeneration<K, V> implements Generation<K, V> {
 
         private final BloomFilter.Reader bloomFilter;
 
-        private final ImmutableBTreeIndex.Reader<K,Long> reader;
+        private final ImmutableBTreeIndex.Reader<K, Long> reader;
 
         private final BlockCompressedRecordFile<V> recordFile;
 
@@ -195,8 +197,8 @@ public final class StableGeneration {
             } else {
                 bloomFilter = null;
             }
-            sizeInBytes = reader.sizeInBytes()+valuesFile.length()+(bloomFilter == null ? 0 : bloomFilter.sizeInBytes());
-            stuffToClose = SharedReference.create((Closeable)new Closeable() {
+            sizeInBytes = reader.sizeInBytes() + valuesFile.length() + (bloomFilter == null ? 0 : bloomFilter.sizeInBytes());
+            stuffToClose = SharedReference.create((Closeable) new Closeable() {
                 public void close() throws IOException {
                     Closeables2.closeQuietly(reader, log);
                     if (bloomFilter != null) Closeables2.closeQuietly(bloomFilter, log);
@@ -216,7 +218,8 @@ public final class StableGeneration {
         }
 
         @Override
-        public @Nullable Boolean isDeleted(final K key) {
+        public @Nullable
+        Boolean isDeleted(final K key) {
             if (bloomFilter == null || bloomFilter.contains(key)) {
                 final Entry<K, Long> result = reader.get(key);
                 return result == null ? null : (result.isDeleted() ? Boolean.TRUE : Boolean.FALSE);
@@ -262,7 +265,7 @@ public final class StableGeneration {
         public Iterator<Entry<K, V>> iterator(K start, boolean startInclusive) {
             return iterator(reader.iterator(start, startInclusive));
         }
-        
+
         private Iterator<Entry<K, V>> iterator(final Iterator<Entry<K, Long>> it) {
             return new Iterator<Entry<K, V>>() {
 
@@ -343,23 +346,23 @@ public final class StableGeneration {
             write(memoryManager, path, generations, keySerializer, valueSerializer, keyComparator, storageType, codec, hasDeletions, true);
         }
 
-        public static <K,V> void write(BloomFilter.MemoryManager memoryManager, File path, final List<Generation<K,V>> generations, Serializer<K> keySerializer, final Serializer<V> valueSerializer, Comparator<K> keyComparator, StorageType storageType, CompressionCodec codec, boolean hasDeletions, boolean useBloomFilter)
+        public static <K, V> void write(BloomFilter.MemoryManager memoryManager, File path, final List<Generation<K, V>> generations, Serializer<K> keySerializer, final Serializer<V> valueSerializer, Comparator<K> keyComparator, StorageType storageType, CompressionCodec codec, boolean hasDeletions, boolean useBloomFilter)
                 throws IOException {
             ImmutableBTreeIndex.Reader reader = null;
             if (storageType == StorageType.INLINE) {
-                final Iterator<Generation.Entry<K,V>> iterator = mergeIterators(generations, keyComparator);
+                final Iterator<Generation.Entry<K, V>> iterator = mergeIterators(generations, keyComparator);
                 final long start = System.nanoTime();
                 ImmutableBTreeIndex.Writer.write(path, iterator, keySerializer, valueSerializer, 65536, hasDeletions);
-                log.info("write b tree time: "+(System.nanoTime()-start)/1000d+" us");
+                log.info("write b tree time: " + (System.nanoTime() - start) / 1000d + " us");
                 if (useBloomFilter) {
                     reader = new ImmutableBTreeIndex.Reader(path, keySerializer, valueSerializer, false);
                 }
             } else if (storageType == StorageType.BLOCK_COMPRESSED) {
                 path.mkdirs();
                 final File valuesFile = new File(path, "values.bin");
-                final Iterator<Generation.Entry<K,V>> iterator = mergeIterators(generations, keyComparator);
+                final Iterator<Generation.Entry<K, V>> iterator = mergeIterators(generations, keyComparator);
                 final BlockCompressedRecordFile.Writer<V> writer = BlockCompressedRecordFile.Writer.open(valuesFile, valueSerializer, codec, 16384, 10, 6);
-                final Iterator<Generation.Entry<K,Long>> keyAddressIterator = new Iterator<Generation.Entry<K,Long>>() {
+                final Iterator<Generation.Entry<K, Long>> keyAddressIterator = new Iterator<Generation.Entry<K, Long>>() {
 
                     @Override
                     public boolean hasNext() {
@@ -367,7 +370,7 @@ public final class StableGeneration {
                     }
 
                     @Override
-                    public Generation.Entry<K,Long> next() {
+                    public Generation.Entry<K, Long> next() {
                         final Generation.Entry<K, V> next = iterator.next();
                         try {
                             if (next.isDeleted()) {
@@ -389,7 +392,7 @@ public final class StableGeneration {
                 final long start = System.nanoTime();
                 ImmutableBTreeIndex.Writer.write(path, keyAddressIterator, keySerializer, longSerializer, 65536, hasDeletions);
                 writer.close();
-                log.info("write b tree time: "+(System.nanoTime()-start)/1000d+" us");
+                log.info("write b tree time: " + (System.nanoTime() - start) / 1000d + " us");
                 if (useBloomFilter) {
                     reader = new ImmutableBTreeIndex.Reader(path, keySerializer, longSerializer, false);
                 }
@@ -406,12 +409,12 @@ public final class StableGeneration {
                     }
                 }
                 reader.close();
-                log.info("write bloom filter time: "+(System.nanoTime()-start)/1000d+" us");
+                log.info("write bloom filter time: " + (System.nanoTime() - start) / 1000d + " us");
             }
         }
-        
-        private static <K,V> Iterator<Generation.Entry<K, V>> mergeIterators(final List<Generation<K,V>> generations, final Comparator<K> keyComparator) throws IOException {
-            return new MergingIterator<K,V>(Lists.transform(generations, new Function<Generation<K, V>, Iterator<Generation.Entry<K, V>>>() {
+
+        private static <K, V> Iterator<Generation.Entry<K, V>> mergeIterators(final List<Generation<K, V>> generations, final Comparator<K> keyComparator) throws IOException {
+            return new MergingIterator<K, V>(Lists.transform(generations, new Function<Generation<K, V>, Iterator<Generation.Entry<K, V>>>() {
                 @Override
                 public Iterator<Generation.Entry<K, V>> apply(Generation<K, V> input) {
                     return input.iterator();

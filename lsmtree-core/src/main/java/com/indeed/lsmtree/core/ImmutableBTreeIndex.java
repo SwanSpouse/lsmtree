@@ -11,7 +11,7 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
- package com.indeed.lsmtree.core;
+package com.indeed.lsmtree.core;
 
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
@@ -59,24 +59,26 @@ public final class ImmutableBTreeIndex {
     public static final class Writer {
 
         //no reason to instantiate this ever
-        private Writer() {}
+        private Writer() {
+        }
 
         /**
          * Use {@link #write(Path, Iterator, Serializer, Serializer, int, boolean)} instead
-         * @param file root lsm tree index directory
-         * @param iterator the iterator
-         * @param keySerializer the key serializer
+         *
+         * @param file            root lsm tree index directory
+         * @param iterator        the iterator
+         * @param keySerializer   the key serializer
          * @param valueSerializer the value serializer
-         * @param blocksize block size
-         * @param keepDeletions true to keep deletion
-         * @param <K> the key type
-         * @param <V> the value type
-         * @throws IOException  if an I/O error occurs
+         * @param blocksize       block size
+         * @param keepDeletions   true to keep deletion
+         * @param <K>             the key type
+         * @param <V>             the value type
+         * @throws IOException if an I/O error occurs
          */
         @Deprecated
         public static <K, V> void write(
                 File file,
-                Iterator<Generation.Entry<K,V>> iterator,
+                Iterator<Generation.Entry<K, V>> iterator,
                 Serializer<K> keySerializer,
                 Serializer<V> valueSerializer,
                 final int blocksize,
@@ -86,19 +88,19 @@ public final class ImmutableBTreeIndex {
         }
 
         /**
-         * @param path root lsm tree index directory
-         * @param iterator the iterator
-         * @param keySerializer the key serializer
+         * @param path            root lsm tree index directory
+         * @param iterator        the iterator
+         * @param keySerializer   the key serializer
          * @param valueSerializer the value serializer
-         * @param blocksize block size
-         * @param keepDeletions true to keep deletion
-         * @param <K> the key type
-         * @param <V> the value type
-         * @throws IOException  if an I/O error occurs
+         * @param blocksize       block size
+         * @param keepDeletions   true to keep deletion
+         * @param <K>             the key type
+         * @param <V>             the value type
+         * @throws IOException if an I/O error occurs
          */
         public static <K, V> void write(
                 Path path,
-                Iterator<Generation.Entry<K,V>> iterator,
+                Iterator<Generation.Entry<K, V>> iterator,
                 Serializer<K> keySerializer,
                 Serializer<V> valueSerializer,
                 final int blocksize,
@@ -150,7 +152,7 @@ public final class ImmutableBTreeIndex {
                     final Header header = new Header();
                     header.indexLevels = indexLevels;
                     header.rootLevelStartAddress = levelStart;
-                    header.fileLength = counter.getCount()+Header.length();
+                    header.fileLength = counter.getCount() + Header.length();
                     return header;
                 } else {
                     tempPath = nextTempPath;
@@ -159,16 +161,16 @@ public final class ImmutableBTreeIndex {
             }
         }
 
-        private static <K,V> WriteLevelResult writeLevel(
+        private static <K, V> WriteLevelResult writeLevel(
                 final CountingOutputStream counter,
                 final Path tempPath,
-                final Iterator<Generation.Entry<K,V>> iterator,
+                final Iterator<Generation.Entry<K, V>> iterator,
                 final Serializer<K> keySerializer,
                 final Serializer<V> valueSerializer,
                 final int blocksize,
                 final boolean keepDeletions
         ) throws IOException {
-            Generation.Entry<K,V> next;
+            Generation.Entry<K, V> next;
             if (!iterator.hasNext()) {
                 return new WriteLevelResult(0, 0);
             }
@@ -182,7 +184,8 @@ public final class ImmutableBTreeIndex {
             boolean done = false;
             final LittleEndianDataOutputStream out = new LittleEndianDataOutputStream(counter);
             long count = 0;
-            outer: while (!done) {
+            outer:
+            while (!done) {
 
                 currentBlock.reset();
                 keyOffsets.clear();
@@ -198,14 +201,14 @@ public final class ImmutableBTreeIndex {
                 while (true) {
                     buffer.reset();
                     final boolean skipDeleted = updateBuffer(next, keySerializer, valueSerializer, keepDeletions, bufferDataOutput);
-                    if (4+2*keyOffsets.size()+2+currentBlock.size()+buffer.size() > blocksize) {
+                    if (4 + 2 * keyOffsets.size() + 2 + currentBlock.size() + buffer.size() > blocksize) {
                         if (currentBlock.size() == 0) {
                             throw new IllegalArgumentException("key value pair is greater than block size");
                         }
                         break;
                     }
                     if (!skipDeleted) {
-                        keyOffsets.add((char)currentBlock.size());
+                        keyOffsets.add((char) currentBlock.size());
                         buffer.writeTo(currentBlock);
                         count++;
                     }
@@ -222,7 +225,7 @@ public final class ImmutableBTreeIndex {
                         out.writeChar(keyOffsets.getChar(i));
                     }
                     currentBlock.writeTo(out);
-                    if (counter.getCount()-start > blocksize) {
+                    if (counter.getCount() - start > blocksize) {
                         log.error("too big");
                     }
                 }
@@ -241,8 +244,8 @@ public final class ImmutableBTreeIndex {
             }
         }
 
-        private static<K,V> boolean updateBuffer(
-                final Generation.Entry<K,V> entry, Serializer<K> keySerializer, Serializer<V> valueSerializer, final boolean keepDeletions, final DataOutput bufferDataOutput
+        private static <K, V> boolean updateBuffer(
+                final Generation.Entry<K, V> entry, Serializer<K> keySerializer, Serializer<V> valueSerializer, final boolean keepDeletions, final DataOutput bufferDataOutput
         ) throws IOException {
             final boolean skipDeleted;
             if (keepDeletions) {
@@ -314,10 +317,10 @@ public final class ImmutableBTreeIndex {
         }
     }
 
-    public static final class Reader<K, V> implements Generation<K,V>, Closeable {
+    public static final class Reader<K, V> implements Generation<K, V>, Closeable {
 
         private final MMapBuffer buffer;
-        
+
         private final Level<K, V> rootLevel;
 
         private final long rootLevelStartAddress;
@@ -329,7 +332,7 @@ public final class ImmutableBTreeIndex {
         private final long size;
 
         private final Path indexFile;
-        
+
         private final Comparator<K> comparator;
 
         private final SharedReference<Closeable> stuffToClose;
@@ -352,7 +355,7 @@ public final class ImmutableBTreeIndex {
             sizeInBytes = Files.size(indexFile);
             buffer = new MMapBuffer(indexFile, FileChannel.MapMode.READ_ONLY, ByteOrder.LITTLE_ENDIAN);
             try {
-                stuffToClose = SharedReference.create((Closeable)buffer);
+                stuffToClose = SharedReference.create((Closeable) buffer);
                 final MemoryDataInput in = new MemoryDataInput(buffer.memory());
                 if (sizeInBytes < Header.length()) {
                     throw new IOException("file is less than header length bytes");
@@ -377,8 +380,8 @@ public final class ImmutableBTreeIndex {
                 throw Throwables.propagate(t);
             }
         }
-        
-        private Block<K,V> rootBlock() {
+
+        private Block<K, V> rootBlock() {
             return new Block<K, V>(null, 0, rootLevel, rootLevel.getBlock(rootLevelStartAddress));
         }
 
@@ -389,39 +392,45 @@ public final class ImmutableBTreeIndex {
                 if (valueBlock == null) return null;
                 return valueBlock.get(key);
             } catch (InternalError e) {
-                throw new RuntimeException("file "+ indexFile.normalize() +" length is currently less than MMapBuffer length, it has been modified after open. this is a huge problem.", e);
+                throw new RuntimeException("file " + indexFile.normalize() + " length is currently less than MMapBuffer length, it has been modified after open. this is a huge problem.", e);
             }
         }
 
         @Override
-        public @Nullable Boolean isDeleted(final K key) {
-            final Entry<K,V> entry = get(key);
+        public @Nullable
+        Boolean isDeleted(final K key) {
+            final Entry<K, V> entry = get(key);
             return entry == null ? null : (entry.isDeleted() ? Boolean.TRUE : Boolean.FALSE);
         }
 
-        @Nullable public Entry<K, V> lower(K key) throws IOException {
+        @Nullable
+        public Entry<K, V> lower(K key) throws IOException {
             return neighbor(key, lower);
         }
 
-        @Nullable public Entry<K, V> floor(K key) throws IOException {
+        @Nullable
+        public Entry<K, V> floor(K key) throws IOException {
             return neighbor(key, floor);
         }
 
-        @Nullable public Entry<K, V> ceil(K key) throws IOException {
+        @Nullable
+        public Entry<K, V> ceil(K key) throws IOException {
             return neighbor(key, ceil);
         }
 
-        @Nullable public Entry<K, V> higher(K key) throws IOException {
+        @Nullable
+        public Entry<K, V> higher(K key) throws IOException {
             return neighbor(key, higher);
         }
-        
-        @Nullable private Entry<K, V> neighbor(K key, NeighborModifier modifier) throws IOException {
+
+        @Nullable
+        private Entry<K, V> neighbor(K key, NeighborModifier modifier) throws IOException {
             try {
                 final Block<K, V> valueBlock = rootBlock().getValueBlock(key);
                 if (valueBlock == null) return null;
                 return valueBlock.neighbor(key, modifier);
             } catch (InternalError e) {
-                throw new IOException("file "+ indexFile.normalize() +" length is currently less than MMapBuffer length, it has been modified after open. this is a huge problem.", e);
+                throw new IOException("file " + indexFile.normalize() + " length is currently less than MMapBuffer length, it has been modified after open. this is a huge problem.", e);
             }
         }
 
@@ -430,16 +439,16 @@ public final class ImmutableBTreeIndex {
                 final Block valueBlock = rootBlock().getFirstValueBlock();
                 return valueBlock.dataBlock.getEntry(0);
             } catch (InternalError e) {
-                throw new IOException("file "+ indexFile.normalize() +" length is currently less than MMapBuffer length, it has been modified after open. this is a huge problem.", e);
+                throw new IOException("file " + indexFile.normalize() + " length is currently less than MMapBuffer length, it has been modified after open. this is a huge problem.", e);
             }
         }
 
         public Entry<K, V> last() throws IOException {
             try {
                 final Block valueBlock = rootBlock().getLastValueBlock();
-                return valueBlock.dataBlock.getEntry(valueBlock.length()-1);
+                return valueBlock.dataBlock.getEntry(valueBlock.length() - 1);
             } catch (InternalError e) {
-                throw new IOException("file "+ indexFile.normalize() +" length is currently less than MMapBuffer length, it has been modified after open. this is a huge problem.", e);
+                throw new IOException("file " + indexFile.normalize() + " length is currently less than MMapBuffer length, it has been modified after open. this is a huge problem.", e);
             }
         }
 
@@ -471,14 +480,14 @@ public final class ImmutableBTreeIndex {
         @Override
         public Iterator<Entry<K, V>> iterator(final @Nullable K start, final boolean startInclusive) {
             return new AbstractIterator<Entry<K, V>>() {
-                
-                Block<K,V> current = null;
+
+                Block<K, V> current = null;
                 int currentIndex;
 
                 @Override
                 protected Entry<K, V> computeNext() {
                     if (current == null) {
-                        final Block<K,V> rootBlock = rootBlock();
+                        final Block<K, V> rootBlock = rootBlock();
                         if (rootBlock == null) {
                             return endOfData();
                         }
@@ -505,7 +514,7 @@ public final class ImmutableBTreeIndex {
                         }
                         currentIndex = 0;
                     }
-                    final Entry<K,V> ret = current.getEntry(currentIndex);
+                    final Entry<K, V> ret = current.getEntry(currentIndex);
                     currentIndex++;
                     return ret;
                 }
@@ -527,13 +536,13 @@ public final class ImmutableBTreeIndex {
                 @Override
                 protected Entry<K, V> computeNext() {
                     if (current == null) {
-                        final Block<K,V> rootBlock = rootBlock();
+                        final Block<K, V> rootBlock = rootBlock();
                         if (rootBlock == null) {
                             return endOfData();
                         }
                         if (start == null) {
                             current = rootBlock.getLastValueBlock();
-                            currentIndex = current.length()-1;
+                            currentIndex = current.length() - 1;
                         } else {
                             current = rootBlock.getValueBlock(start);
                             if (current == null) {
@@ -543,7 +552,7 @@ public final class ImmutableBTreeIndex {
                             if (insertionPoint >= 0) {
                                 currentIndex = startInclusive ? insertionPoint : insertionPoint - 1;
                             } else {
-                                currentIndex = (~insertionPoint)-1;
+                                currentIndex = (~insertionPoint) - 1;
                             }
                         }
                     }
@@ -552,9 +561,9 @@ public final class ImmutableBTreeIndex {
                         if (current == null) {
                             return endOfData();
                         }
-                        currentIndex = current.length()-1;
+                        currentIndex = current.length() - 1;
                     }
-                    final Entry<K,V> ret = current.getEntry(currentIndex);
+                    final Entry<K, V> ret = current.getEntry(currentIndex);
                     currentIndex--;
                     return ret;
                 }
@@ -568,6 +577,7 @@ public final class ImmutableBTreeIndex {
 
         /**
          * use {@link #getIndexPath()} instead
+         *
          * @return
          */
         @Deprecated
@@ -607,12 +617,12 @@ public final class ImmutableBTreeIndex {
             return hasDeletions;
         }
 
-        private static final class Block<K,V> {
+        private static final class Block<K, V> {
 
-            final Block<K,V> parent;
+            final Block<K, V> parent;
             final int parentPosition;
-            final Level<K,V> level;
-            final Level<K,V>.DataBlock dataBlock;
+            final Level<K, V> level;
+            final Level<K, V>.DataBlock dataBlock;
 
 
             Block(@Nullable Block<K, V> parent, int parentPosition, Level<K, V> level, Level.DataBlock dataBlock) {
@@ -626,19 +636,21 @@ public final class ImmutableBTreeIndex {
                 return level.isValueLevel();
             }
 
-            @Nullable Block<K,V> getChildBlock(int index) {
+            @Nullable
+            Block<K, V> getChildBlock(int index) {
                 final Level<K, V> nextLevel = Preconditions.checkNotNull(level.nextLevel);
                 if (index >= dataBlock.length()) {
                     if (index == dataBlock.length()) {
-                        final Block<K,V> nextBlock = nextBlock();
+                        final Block<K, V> nextBlock = nextBlock();
                         return nextBlock == null ? null : nextBlock.getChildBlock(0);
                     } else {
                         throw new RuntimeException();
                     }
-                } if (index < 0) {
+                }
+                if (index < 0) {
                     if (index == -1) {
-                        final Block<K,V> previousBlock = previousBlock();
-                        return previousBlock == null ? null : previousBlock.getChildBlock(previousBlock.dataBlock.length-1);
+                        final Block<K, V> previousBlock = previousBlock();
+                        return previousBlock == null ? null : previousBlock.getChildBlock(previousBlock.dataBlock.length - 1);
                     } else {
                         throw new RuntimeException();
                     }
@@ -651,60 +663,67 @@ public final class ImmutableBTreeIndex {
                 return dataBlock.length();
             }
 
-            @Nullable Block<K,V> nextBlock() {
-                return parent == null ? null : parent.getChildBlock(parentPosition+1);
+            @Nullable
+            Block<K, V> nextBlock() {
+                return parent == null ? null : parent.getChildBlock(parentPosition + 1);
             }
 
-            @Nullable Block<K,V> previousBlock() {
-                return parent == null ? null : parent.getChildBlock(parentPosition-1);
+            @Nullable
+            Block<K, V> previousBlock() {
+                return parent == null ? null : parent.getChildBlock(parentPosition - 1);
             }
 
-            @Nullable Block<K,V> getContainingBlock(K key) {
+            @Nullable
+            Block<K, V> getContainingBlock(K key) {
                 final Level<K, V> nextLevel = Preconditions.checkNotNull(level.nextLevel);
                 final int floorIndex = neighborIndex(key, floor);
                 final SearchResult<K, Long> searchResult = getSearchResult(floorIndex);
-                return searchResult.match(new SearchResult.Matcher<K, Long, Block<K,V>>() {
+                return searchResult.match(new SearchResult.Matcher<K, Long, Block<K, V>>() {
 
                     Block<K, V> found(final Entry<K, Long> floor) {
                         return new Block(Block.this, floorIndex, nextLevel, nextLevel.getBlock(floor.getValue()));
                     }
 
-                    @Nullable Block<K, V> low() {
+                    @Nullable
+                    Block<K, V> low() {
                         return null;
                     }
                 });
             }
 
-            @Nullable Block<K,V> getValueBlock(K key) {
+            @Nullable
+            Block<K, V> getValueBlock(K key) {
                 if (isValueLevel()) return this;
                 final Block<K, V> containingBlock = getContainingBlock(key);
                 if (containingBlock == null) return null;
                 return containingBlock.getValueBlock(key);
             }
 
-            Block<K,V> getFirstValueBlock() {
+            Block<K, V> getFirstValueBlock() {
                 if (isValueLevel()) return this;
                 final Block<K, V> childBlock = Preconditions.checkNotNull(getChildBlock(0));
                 return childBlock.getFirstValueBlock();
             }
 
-            Block<K,V> getLastValueBlock() {
+            Block<K, V> getLastValueBlock() {
                 if (isValueLevel()) return this;
                 final Block<K, V> childBlock = Preconditions.checkNotNull(getChildBlock(length() - 1));
                 return childBlock.getLastValueBlock();
             }
 
-            @Nullable Entry<K,V> get(K key) {
+            @Nullable
+            Entry<K, V> get(K key) {
                 if (!level.isValueLevel()) throw new RuntimeException();
-                return (Entry<K,V>)dataBlock.get(key);
+                return (Entry<K, V>) dataBlock.get(key);
             }
-            
+
             int neighborIndex(K key, NeighborModifier modifier) {
                 final int insertionPoint = dataBlock.search(key);
                 return insertionPoint >= 0 ? insertionPoint + modifier.addFound : (~insertionPoint) + modifier.addNotFound;
             }
-            
-            @Nullable <A> Entry<K,A> neighbor(final K key, final NeighborModifier modifier) {
+
+            @Nullable
+            <A> Entry<K, A> neighbor(final K key, final NeighborModifier modifier) {
                 final SearchResult<K, A> lowerEntry = getSearchResult(neighborIndex(key, modifier));
                 return lowerEntry.match(new SearchResult.Matcher<K, A, Entry<K, A>>() {
 
@@ -712,66 +731,81 @@ public final class ImmutableBTreeIndex {
                         return entry;
                     }
 
-                    @Nullable Entry<K, A> low() {
+                    @Nullable
+                    Entry<K, A> low() {
                         final Block<K, V> previousBlock = previousBlock();
                         return previousBlock == null ? null : previousBlock.<A>neighbor(key, modifier);
                     }
 
-                    @Nullable Entry<K, A> high() {
+                    @Nullable
+                    Entry<K, A> high() {
                         final Block<K, V> nextBlock = nextBlock();
                         return nextBlock == null ? null : nextBlock.<A>neighbor(key, modifier);
                     }
                 });
             }
 
-            <A> SearchResult<K,A> getSearchResult(final int neighborIndex) {
+            <A> SearchResult<K, A> getSearchResult(final int neighborIndex) {
                 if (neighborIndex < 0) return Low.low();
                 if (neighborIndex >= dataBlock.length()) return High.high();
                 return new Found(dataBlock.getEntry(neighborIndex));
             }
-            
+
             public K getKey(int index) {
                 if (!level.isValueLevel()) throw new RuntimeException();
                 return dataBlock.getKey(index);
             }
-            
-            public Entry<K,V> getEntry(int index) {
+
+            public Entry<K, V> getEntry(int index) {
                 if (!level.isValueLevel()) throw new RuntimeException();
-                return (Entry<K,V>)dataBlock.getEntry(index);
+                return (Entry<K, V>) dataBlock.getEntry(index);
             }
-            
+
             int search(K key) {
                 return dataBlock.search(key);
             }
         }
 
-        private static interface SearchResult<K,V> {
-            
-            public <Z> Z match(Matcher<K,V,Z> m);
-            
-            static abstract class Matcher<K,V,Z> {
-                Z found(Entry<K,V> entry) {return otherwise();}
-                Z low() {return otherwise();}
-                Z high() {return otherwise();}
-                Z otherwise() {throw new UnsupportedOperationException();}
+        private static interface SearchResult<K, V> {
+
+            public <Z> Z match(Matcher<K, V, Z> m);
+
+            static abstract class Matcher<K, V, Z> {
+                Z found(Entry<K, V> entry) {
+                    return otherwise();
+                }
+
+                Z low() {
+                    return otherwise();
+                }
+
+                Z high() {
+                    return otherwise();
+                }
+
+                Z otherwise() {
+                    throw new UnsupportedOperationException();
+                }
             }
         }
-        
-        private static final class Found<K,V> implements SearchResult<K,V> {
-            final Entry<K,V> entry;
+
+        private static final class Found<K, V> implements SearchResult<K, V> {
+            final Entry<K, V> entry;
 
             private Found(final Entry<K, V> entry) {
                 this.entry = entry;
             }
 
-            public <Z> Z match(final Matcher<K,V,Z> m) {
+            public <Z> Z match(final Matcher<K, V, Z> m) {
                 return m.found(entry);
             }
         }
-        
-        private static final class Low<K,V> implements SearchResult<K,V> {
 
-            static <K,V> Low<K,V> low() {return low;}
+        private static final class Low<K, V> implements SearchResult<K, V> {
+
+            static <K, V> Low<K, V> low() {
+                return low;
+            }
 
             static final Low low = new Low();
 
@@ -779,18 +813,20 @@ public final class ImmutableBTreeIndex {
                 return m.low();
             }
         }
-        
-        private static final class High<K,V> implements SearchResult<K,V> {
-            
-            static <K,V> High<K,V> high() {return high;}
-            
+
+        private static final class High<K, V> implements SearchResult<K, V> {
+
+            static <K, V> High<K, V> high() {
+                return high;
+            }
+
             static final High high = new High();
 
             public <Z> Z match(final Matcher<K, V, Z> m) {
                 return m.high();
             }
         }
-        
+
         private static final class NeighborModifier {
             final int addFound;
             final int addNotFound;
@@ -814,7 +850,7 @@ public final class ImmutableBTreeIndex {
             final Serializer valueSerializer;
             final Comparator<K> comparator;
             final boolean hasDeletions;
-            
+
             static <K, V> Level<K, V> build(Memory memory, Serializer<K> keySerializer, Serializer<V> valueSerializer, Comparator<K> comparator, boolean hasDeletions, int numLevels) {
                 if (numLevels == 0) {
                     return new Level<K, V>(memory, null, keySerializer, valueSerializer, comparator, hasDeletions);
@@ -849,14 +885,14 @@ public final class ImmutableBTreeIndex {
 
                 DataBlock(final long blockStart) {
                     length = memory.getInt(blockStart);
-                    this.offsetStart = blockStart+4;
-                    kvStart = offsetStart+2*length;
+                    this.offsetStart = blockStart + 4;
+                    kvStart = offsetStart + 2 * length;
                     in = new MemoryDataInput(memory);
                 }
 
                 K getKey(int index) {
-                    final int offset = memory.getChar(offsetStart+2*index);
-                    in.seek(kvStart+offset);
+                    final int offset = memory.getChar(offsetStart + 2 * index);
+                    in.seek(kvStart + offset);
                     try {
                         return keySerializer.read(in);
                     } catch (IOException e) {
@@ -865,8 +901,8 @@ public final class ImmutableBTreeIndex {
                 }
 
                 Entry<K, Object> getEntry(int index) {
-                    final int offset = memory.getChar(offsetStart+2*index);
-                    in.seek(kvStart+offset);
+                    final int offset = memory.getChar(offsetStart + 2 * index);
+                    in.seek(kvStart + offset);
                     try {
                         final K key = keySerializer.read(in);
                         final boolean isDeleted = hasDeletions && in.readBoolean();
@@ -883,8 +919,9 @@ public final class ImmutableBTreeIndex {
                 int length() {
                     return length;
                 }
-                
-                @Nullable Entry<K, Object> get(K key) {
+
+                @Nullable
+                Entry<K, Object> get(K key) {
                     final int insertionPoint = search(key);
                     if (insertionPoint >= 0) {
                         return getEntry(insertionPoint);
@@ -894,7 +931,7 @@ public final class ImmutableBTreeIndex {
 
                 int search(K key) {
                     int low = 0;
-                    int high = length-1;
+                    int high = length - 1;
 
                     while (low <= high) {
                         final int mid = (low + high) >>> 1;

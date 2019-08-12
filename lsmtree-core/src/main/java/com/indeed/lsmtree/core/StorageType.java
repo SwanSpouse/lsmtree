@@ -11,7 +11,7 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
- package com.indeed.lsmtree.core;
+package com.indeed.lsmtree.core;
 
 /**
  * @author jplaisance

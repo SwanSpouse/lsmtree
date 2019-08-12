@@ -202,6 +202,7 @@ public final class BloomFilter {
         public MemoryManager(long physicalSize, boolean mLock) {
             this.mLock = mLock;
             physicalSize = physicalSize & ADDRESS_MASK;
+            // 首先申请这么大的内存，然后根据PageSize切分成freePages
             physicalMemory = new NativeBuffer(physicalSize, ByteOrder.LITTLE_ENDIAN);
             if (mLock) physicalMemory.mlock(0, physicalSize);
             activePages = new PageTableEntry[(int) (physicalSize >>> PAGE_BITS)];
@@ -209,18 +210,12 @@ public final class BloomFilter {
                 freePages.add(physicalMemory.memory().slice(i, PAGE_SIZE));
             }
             final Thread cleaner = new Thread(new Runnable() {
-
                 @Override
                 public void run() {
-
                     synchronized (activePages) {
                         while (runCleaner.get()) {
                             final List<ScoredPageTableEntry> scoredActivePages = Lists.newArrayListWithCapacity(activePages.length);
-                            final PriorityQueue<ScoredPageTableEntry> bestInactivePages =
-                                    new PriorityQueue<ScoredPageTableEntry>(
-                                            10,
-                                            SCORE_COMPARATOR
-                                    );
+                            final PriorityQueue<ScoredPageTableEntry> bestInactivePages = new PriorityQueue<ScoredPageTableEntry>(10, SCORE_COMPARATOR);
 
                             int activeIndex = 0;
                             //goal of stuff in this block is to replace the worst active pages with the best inactive pages

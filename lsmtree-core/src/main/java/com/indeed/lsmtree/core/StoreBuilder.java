@@ -11,7 +11,7 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
- package com.indeed.lsmtree.core;
+package com.indeed.lsmtree.core;
 
 import com.indeed.util.compress.CompressionCodec;
 import com.indeed.util.serialization.Serializer;
@@ -25,7 +25,7 @@ import java.util.Comparator;
 /**
  * @author jplaisance
  */
-public final class StoreBuilder<K,V> {
+public final class StoreBuilder<K, V> {
 
     private static final Logger log = Logger.getLogger(StoreBuilder.class);
 
@@ -33,15 +33,15 @@ public final class StoreBuilder<K,V> {
     private final Serializer<K> keySerializer;
     private final Serializer<V> valueSerializer;
     private Comparator<K> comparator = new ComparableComparator();
-    private long maxVolatileGenerationSize = 8*1024*1024;
+    private long maxVolatileGenerationSize = 8 * 1024 * 1024;
     private StorageType storageType = StorageType.INLINE;
     private CompressionCodec codec = null;
     private boolean readOnly = false;
     private boolean dedicatedPartition = false;
-    private long reservedSpaceThreshold = 1024*1024*256;
+    private long reservedSpaceThreshold = 1024 * 1024 * 256;
     private boolean mlockFiles = false;
     private boolean mlockBloomFilters = false;
-    private long bloomFilterMemory = 1024*1024*32;
+    private long bloomFilterMemory = 1024 * 1024 * 32;
 
     // 类似于创建一个数据库
     public StoreBuilder(final File root, final Serializer<K> keySerializer, final Serializer<V> valueSerializer) {
@@ -54,7 +54,7 @@ public final class StoreBuilder<K,V> {
         return comparator;
     }
 
-    public StoreBuilder<K,V> setComparator(final Comparator<K> comparator) {
+    public StoreBuilder<K, V> setComparator(final Comparator<K> comparator) {
         this.comparator = comparator;
         return this;
     }
@@ -63,7 +63,7 @@ public final class StoreBuilder<K,V> {
         return maxVolatileGenerationSize;
     }
 
-    public StoreBuilder<K,V> setMaxVolatileGenerationSize(final long maxVolatileGenerationSize) {
+    public StoreBuilder<K, V> setMaxVolatileGenerationSize(final long maxVolatileGenerationSize) {
         this.maxVolatileGenerationSize = maxVolatileGenerationSize;
         return this;
     }
@@ -72,7 +72,7 @@ public final class StoreBuilder<K,V> {
         return storageType;
     }
 
-    public StoreBuilder<K,V> setStorageType(final StorageType storageType) {
+    public StoreBuilder<K, V> setStorageType(final StorageType storageType) {
         this.storageType = storageType;
         return this;
     }
@@ -81,7 +81,7 @@ public final class StoreBuilder<K,V> {
         return codec;
     }
 
-    public StoreBuilder<K,V> setCodec(final CompressionCodec codec) {
+    public StoreBuilder<K, V> setCodec(final CompressionCodec codec) {
         this.codec = codec;
         return this;
     }
@@ -90,7 +90,7 @@ public final class StoreBuilder<K,V> {
         return readOnly;
     }
 
-    public StoreBuilder<K,V> setReadOnly(final boolean readOnly) {
+    public StoreBuilder<K, V> setReadOnly(final boolean readOnly) {
         this.readOnly = readOnly;
         return this;
     }
@@ -99,7 +99,7 @@ public final class StoreBuilder<K,V> {
         return dedicatedPartition;
     }
 
-    public StoreBuilder<K,V> setDedicatedPartition(final boolean dedicatedPartition) {
+    public StoreBuilder<K, V> setDedicatedPartition(final boolean dedicatedPartition) {
         this.dedicatedPartition = dedicatedPartition;
         return this;
     }
@@ -108,7 +108,7 @@ public final class StoreBuilder<K,V> {
         return reservedSpaceThreshold;
     }
 
-    public StoreBuilder<K,V> setReservedSpaceThreshold(final long reservedSpaceThreshold) {
+    public StoreBuilder<K, V> setReservedSpaceThreshold(final long reservedSpaceThreshold) {
         this.reservedSpaceThreshold = reservedSpaceThreshold;
         return this;
     }
@@ -117,7 +117,7 @@ public final class StoreBuilder<K,V> {
         return mlockFiles;
     }
 
-    public StoreBuilder<K,V> setMlockFiles(final boolean mlockFiles) {
+    public StoreBuilder<K, V> setMlockFiles(final boolean mlockFiles) {
         this.mlockFiles = mlockFiles;
         return this;
     }
@@ -126,7 +126,7 @@ public final class StoreBuilder<K,V> {
         return mlockBloomFilters;
     }
 
-    public StoreBuilder<K,V> setMlockBloomFilters(final boolean mlockBloomFilters) {
+    public StoreBuilder<K, V> setMlockBloomFilters(final boolean mlockBloomFilters) {
         this.mlockBloomFilters = mlockBloomFilters;
         return this;
     }
@@ -135,12 +135,12 @@ public final class StoreBuilder<K,V> {
         return bloomFilterMemory;
     }
 
-    public StoreBuilder<K,V> setBloomFilterMemory(final long bloomFilterMemory) {
+    public StoreBuilder<K, V> setBloomFilterMemory(final long bloomFilterMemory) {
         this.bloomFilterMemory = bloomFilterMemory;
         return this;
     }
 
-    public Store<K,V> build() throws IOException {
+    public Store<K, V> build() throws IOException {
         return new Store<K, V>(
                 root,
                 keySerializer,

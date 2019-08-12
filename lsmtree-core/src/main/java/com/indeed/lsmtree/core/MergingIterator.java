@@ -11,7 +11,7 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
- package com.indeed.lsmtree.core;
+package com.indeed.lsmtree.core;
 
 import com.google.common.collect.AbstractIterator;
 import com.google.common.collect.Iterators;
@@ -29,30 +29,30 @@ import java.util.PriorityQueue;
 /**
  * @author jplaisance
  */
-public final class MergingIterator<K,V> extends AbstractIterator<Generation.Entry<K,V>> {
+public final class MergingIterator<K, V> extends AbstractIterator<Generation.Entry<K, V>> {
     private static final Logger log = Logger.getLogger(MergingIterator.class);
 
-    private final PriorityQueue<PeekingIterator<EntryAndGenerationId<K,V>>> heap;
+    private final PriorityQueue<PeekingIterator<EntryAndGenerationId<K, V>>> heap;
 
-    private final List<PeekingIterator<EntryAndGenerationId<K,V>>> temp = Lists.newArrayList();
+    private final List<PeekingIterator<EntryAndGenerationId<K, V>>> temp = Lists.newArrayList();
 
     private final Comparator<K> keyComparator;
 
-    public MergingIterator(final Collection<Iterator<Generation.Entry<K,V>>> iterators, final Comparator<K> keyComparator) {
+    public MergingIterator(final Collection<Iterator<Generation.Entry<K, V>>> iterators, final Comparator<K> keyComparator) {
         this.keyComparator = keyComparator;
-        Comparator<PeekingIterator<EntryAndGenerationId<K,V>>> comparator = new Comparator<PeekingIterator<EntryAndGenerationId<K,V>>>() {
+        Comparator<PeekingIterator<EntryAndGenerationId<K, V>>> comparator = new Comparator<PeekingIterator<EntryAndGenerationId<K, V>>>() {
             @Override
-            public int compare(PeekingIterator<EntryAndGenerationId<K,V>> o1, PeekingIterator<EntryAndGenerationId<K,V>> o2) {
-                EntryAndGenerationId<K,V> a = o1.peek();
-                EntryAndGenerationId<K,V> b = o2.peek();
+            public int compare(PeekingIterator<EntryAndGenerationId<K, V>> o1, PeekingIterator<EntryAndGenerationId<K, V>> o2) {
+                EntryAndGenerationId<K, V> a = o1.peek();
+                EntryAndGenerationId<K, V> b = o2.peek();
                 int cmp = keyComparator.compare(a.entry.getKey(), b.entry.getKey());
                 if (cmp != 0) return cmp;
                 return Ints.compare(a.generationId, b.generationId);
             }
         };
-        heap = new PriorityQueue<PeekingIterator<EntryAndGenerationId<K,V>>>(iterators.size(), comparator);
+        heap = new PriorityQueue<PeekingIterator<EntryAndGenerationId<K, V>>>(iterators.size(), comparator);
         int i = 0;
-        for (final Iterator<Generation.Entry<K,V>> iterator : iterators) {
+        for (final Iterator<Generation.Entry<K, V>> iterator : iterators) {
             final int generationId = i;
             PeekingIterator<EntryAndGenerationId<K, V>> iter = Iterators.peekingIterator(new Iterator<EntryAndGenerationId<K, V>>() {
 
@@ -86,8 +86,8 @@ public final class MergingIterator<K,V> extends AbstractIterator<Generation.Entr
             return endOfData();
         }
 
-        PeekingIterator<EntryAndGenerationId<K,V>> first = heap.poll();
-        EntryAndGenerationId<K,V> ret = first.next();
+        PeekingIterator<EntryAndGenerationId<K, V>> first = heap.poll();
+        EntryAndGenerationId<K, V> ret = first.next();
         if (first.hasNext()) {
             temp.add(first);
         }
@@ -103,7 +103,7 @@ public final class MergingIterator<K,V> extends AbstractIterator<Generation.Entr
         return ret.entry;
     }
 
-    private static final class EntryAndGenerationId<K,V> {
+    private static final class EntryAndGenerationId<K, V> {
         final Generation.Entry<K, V> entry;
         final int generationId;
 
