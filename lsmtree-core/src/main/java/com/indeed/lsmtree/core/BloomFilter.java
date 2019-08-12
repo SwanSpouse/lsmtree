@@ -11,7 +11,7 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
- package com.indeed.lsmtree.core;
+package com.indeed.lsmtree.core;
 
 import com.google.common.base.Throwables;
 import com.google.common.collect.ComparisonChain;
@@ -44,17 +44,18 @@ import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * @author jplaisance
+ * 布隆过滤器
  */
 public final class BloomFilter {
 
     private static final Logger log = Logger.getLogger(BloomFilter.class);
 
-    private static final int NUM_HASHES = 6;
+    private static final int NUM_HASHES = 6; // 多少个Hash组成的布隆过滤器
 
     //must be a power of 2 for offset and mask calculations to be correct
     private static final long PAGE_SIZE = 65536;
 
-    private static final long PAGE_OFFSET_MASK = PAGE_SIZE-1;
+    private static final long PAGE_OFFSET_MASK = PAGE_SIZE - 1;
 
     private static final long PAGE_BITS = Long.bitCount(PAGE_OFFSET_MASK);
 
@@ -72,15 +73,15 @@ public final class BloomFilter {
         public static <K> void write(MemoryManager memoryManager, File file, Iterator<? extends Generation.Entry<K, ?>> iterator, Serializer<K> keySerializer, long size)
                 throws IOException, NotEnoughMemoryException {
             final MemoryManager.AddressSpace addressSpace = memoryManager.open(file, size);
-            final Memory[] pages = new Memory[(int)((size-1) >> PAGE_BITS)+1];
+            final Memory[] pages = new Memory[(int) ((size - 1) >> PAGE_BITS) + 1];
             long pageIndex = 0;
             try {
                 for (pageIndex = 0; pageIndex < size; pageIndex += PAGE_SIZE) {
                     final Memory page = addressSpace.getPageForWriting(pageIndex);
                     if (page == null) {
-                        throw new NotEnoughMemoryException("insufficient memory available to write bloom filter, allocated "+pageIndex+" bytes before failing");
+                        throw new NotEnoughMemoryException("insufficient memory available to write bloom filter, allocated " + pageIndex + " bytes before failing");
                     }
-                    pages[((int)(pageIndex >>> PAGE_BITS))] = page;
+                    pages[((int) (pageIndex >>> PAGE_BITS))] = page;
                 }
             } catch (Throwable t) {
                 for (long j = 0; j < pageIndex; j += PAGE_SIZE) {
@@ -103,14 +104,14 @@ public final class BloomFilter {
                     int previousHash = MurmurHash.SEED64;
                     for (int i = 0; i < NUM_HASHES; i++) {
                         long hash = getHash(bytes, previousHash);
-                        previousHash = (int)hash;
-                        hash = hash % (size*8);
-                        final long byteIndex = hash>>>3;
-                        final int bitIndex = (int)(hash&7);
-                        final Memory memory = pages[((int)(byteIndex >>> PAGE_BITS))];
-                        int current = memory.getByte(byteIndex & PAGE_OFFSET_MASK)&0xFF;
-                        current |= 1<<bitIndex;
-                        memory.putByte(byteIndex & PAGE_OFFSET_MASK, (byte)current);
+                        previousHash = (int) hash;
+                        hash = hash % (size * 8);
+                        final long byteIndex = hash >>> 3;
+                        final int bitIndex = (int) (hash & 7);
+                        final Memory memory = pages[((int) (byteIndex >>> PAGE_BITS))];
+                        int current = memory.getByte(byteIndex & PAGE_OFFSET_MASK) & 0xFF;
+                        current |= 1 << bitIndex;
+                        memory.putByte(byteIndex & PAGE_OFFSET_MASK, (byte) current);
                     }
                 }
             } finally {
@@ -146,16 +147,16 @@ public final class BloomFilter {
                 int loadedFilters = 0;
                 for (int i = 0; i < NUM_HASHES; i++) {
                     long hash = getHash(bytes, previousHash);
-                    previousHash = (int)hash;
-                    hash = hash % (size*8);
-                    final long byteIndex = hash>>>3;
-                    final int bitIndex = (int)(hash&7);
+                    previousHash = (int) hash;
+                    hash = hash % (size * 8);
+                    final long byteIndex = hash >>> 3;
+                    final int bitIndex = (int) (hash & 7);
                     final Memory page = addressSpace.getPage(byteIndex);
                     if (page == null) continue;
                     loadedFilters++;
-                    final int current = page.getByte(byteIndex & PAGE_OFFSET_MASK)&0xFF;
+                    final int current = page.getByte(byteIndex & PAGE_OFFSET_MASK) & 0xFF;
                     addressSpace.releasePage(byteIndex);
-                    if ((current & (1<<bitIndex)) == 0) {
+                    if ((current & (1 << bitIndex)) == 0) {
                         addressSpace.incUsefulCount();
                         addressSpace.incTotalCount();
                         return false;
@@ -178,6 +179,7 @@ public final class BloomFilter {
         }
     }
 
+    // 认为就是获取hash值呗？
     private static long getHash(byte[] bytes, int seedValue) {
         long hash = MurmurHash.hash64(bytes, seedValue);
         if (hash < 0) hash = ~hash;
@@ -202,7 +204,7 @@ public final class BloomFilter {
             physicalSize = physicalSize & ADDRESS_MASK;
             physicalMemory = new NativeBuffer(physicalSize, ByteOrder.LITTLE_ENDIAN);
             if (mLock) physicalMemory.mlock(0, physicalSize);
-            activePages = new PageTableEntry[(int)(physicalSize >>> PAGE_BITS)];
+            activePages = new PageTableEntry[(int) (physicalSize >>> PAGE_BITS)];
             for (long i = 0; i < physicalSize; i += PAGE_SIZE) {
                 freePages.add(physicalMemory.memory().slice(i, PAGE_SIZE));
             }
@@ -226,7 +228,7 @@ public final class BloomFilter {
 
                                 //first create list of active pages and heap of best activePages.length inactive pages
                                 for (AddressSpace addressSpace : addressSpaces) {
-                                    final double usefulness = addressSpace.useful.doubleValue()/addressSpace.total.get();
+                                    final double usefulness = addressSpace.useful.doubleValue() / addressSpace.total.get();
                                     for (PageTableEntry pte : addressSpace.pageTable) {
                                         synchronized (pte) {
                                             final double score = pte.requestsCounter * usefulness;
@@ -253,7 +255,7 @@ public final class BloomFilter {
                                 //if there are free pages, load the best inactive pages into the free pages and move them to the active set
                                 synchronized (freePages) {
                                     while (!scoredInactivePages.isEmpty() && !freePages.isEmpty()) {
-                                        final ScoredPageTableEntry scoreAndPte = scoredInactivePages.remove(scoredInactivePages.size()-1);
+                                        final ScoredPageTableEntry scoreAndPte = scoredInactivePages.remove(scoredInactivePages.size() - 1);
                                         final PageTableEntry pte = scoreAndPte.pageTableEntry;
                                         synchronized (pte) {
                                             if (pte.memory == null) {
@@ -274,7 +276,7 @@ public final class BloomFilter {
                                 Collections.sort(scoredActivePages, SCORE_COMPARATOR);
 
                                 //replace bad active pages with good inactive pages
-                                int inactiveIndex = scoredInactivePages.size()-1;
+                                int inactiveIndex = scoredInactivePages.size() - 1;
                                 Memory freePage = null;
                                 while (inactiveIndex >= 0) {
                                     final ScoredPageTableEntry inactiveEntry = scoredInactivePages.get(inactiveIndex);
@@ -323,7 +325,7 @@ public final class BloomFilter {
                                         inactivePte.memory = freePage;
                                         freePage = null;
                                     }
-                                    scoredActivePages.set(activeIndex-1, inactiveEntry);
+                                    scoredActivePages.set(activeIndex - 1, inactiveEntry);
                                 }
                                 //downsample usage statistics so that current values take precedence
                                 for (AddressSpace addressSpace : addressSpaces) {
@@ -347,11 +349,11 @@ public final class BloomFilter {
                                                     " total: " +
                                                     total +
                                                     " usefulness: " +
-                                                    (double)useful / total
+                                                    (double) useful / total
                                     );
                                     for (PageTableEntry pte : addressSpace.pageTable) {
                                         synchronized (pte) {
-                                            pte.requestsCounter = pte.requestsCounter*9/10;
+                                            pte.requestsCounter = pte.requestsCounter * 9 / 10;
                                         }
                                     }
                                 }
@@ -376,7 +378,7 @@ public final class BloomFilter {
                         }
                     }
                 }
-            }, "PageTableCleanerThread-"+THREAD_NUMBERER.getAndIncrement());
+            }, "PageTableCleanerThread-" + THREAD_NUMBERER.getAndIncrement());
             cleaner.setDaemon(true);
             cleaner.start();
         }
@@ -397,20 +399,21 @@ public final class BloomFilter {
             return addressSpace;
         }
 
-        private @Nullable Memory getFreePage() throws IOException {
+        private @Nullable
+        Memory getFreePage() throws IOException {
             synchronized (freePages) {
                 if (!freePages.isEmpty()) {
-                    return freePages.remove(freePages.size()-1);
+                    return freePages.remove(freePages.size() - 1);
                 }
             }
             synchronized (activePages) {
-                for (;activePagePointer < activePagesEnd; activePagePointer++) {
+                for (; activePagePointer < activePagesEnd; activePagePointer++) {
                     final PageTableEntry pte = activePages[activePagePointer];
                     final Memory freePage = pte.addressSpace.freePage(pte.index);
                     if (freePage != null) {
                         activePagePointer++;
                         //heuristic: if more than 20% of the active pages have been overwritten since the last page table clean, wake up the cleaner
-                        if (activePagePointer > activePages.length/5) {
+                        if (activePagePointer > activePages.length / 5) {
                             activePages.notify();
                         }
                         return freePage;
@@ -431,7 +434,7 @@ public final class BloomFilter {
         public final class AddressSpace implements Closeable {
             private final File file;
             private final RandomAccessFile raf;
-            private final byte[] pageBuffer = new byte[(int)PAGE_SIZE];
+            private final byte[] pageBuffer = new byte[(int) PAGE_SIZE];
             private final PageTableEntry[] pageTable;
             private final long length;
             private final AtomicLong useful = new AtomicLong(50);
@@ -444,7 +447,7 @@ public final class BloomFilter {
                 if (length > raf.length()) {
                     raf.setLength(length);
                 }
-                final int numPages = (int)((length - 1) >> PAGE_BITS) + 1;
+                final int numPages = (int) ((length - 1) >> PAGE_BITS) + 1;
                 pageTable = new PageTableEntry[numPages];
                 for (int i = 0; i < numPages; i++) {
                     pageTable[i] = new PageTableEntry(this, i);
@@ -452,13 +455,14 @@ public final class BloomFilter {
             }
 
             private PageTableEntry getPageTableEntry(final long address) {
-                return pageTable[((int)(address >>> PAGE_BITS))];
+                return pageTable[((int) (address >>> PAGE_BITS))];
             }
 
             private void loadPage(int index, Memory freePage) throws IOException {
-                final long address = (long)index << PAGE_BITS;
-                if (log.isDebugEnabled()) log.debug("loading page in file " + file.getPath() + " at address " + address);
-                final int pageLength = (int)Math.min(PAGE_SIZE, length - address);
+                final long address = (long) index << PAGE_BITS;
+                if (log.isDebugEnabled())
+                    log.debug("loading page in file " + file.getPath() + " at address " + address);
+                final int pageLength = (int) Math.min(PAGE_SIZE, length - address);
                 synchronized (raf) {
                     raf.seek(address);
                     raf.readFully(pageBuffer, 0, pageLength);
@@ -468,11 +472,12 @@ public final class BloomFilter {
 
             private void syncPage(int index) throws IOException {
                 final PageTableEntry pte = pageTable[index];
-                final long address = (long)index << PAGE_BITS;
+                final long address = (long) index << PAGE_BITS;
                 synchronized (pte) {
                     if (pte.dirty) {
-                        if (log.isDebugEnabled()) log.debug("synchronizing page in file " + file.getPath() + " at address " + address);
-                        final int pageLength = (int)Math.min(PAGE_SIZE, length-address);
+                        if (log.isDebugEnabled())
+                            log.debug("synchronizing page in file " + file.getPath() + " at address " + address);
+                        final int pageLength = (int) Math.min(PAGE_SIZE, length - address);
                         synchronized (raf) {
                             pte.memory.getBytes(0, pageBuffer, 0, pageLength);
                             raf.seek(address);
@@ -483,7 +488,8 @@ public final class BloomFilter {
                 }
             }
 
-            private @Nullable Memory freePage(int index) throws IOException {
+            private @Nullable
+            Memory freePage(int index) throws IOException {
                 final PageTableEntry pte = pageTable[index];
                 synchronized (pte) {
                     if (pte.memory == null) {
@@ -492,7 +498,8 @@ public final class BloomFilter {
                     if (pte.refCount > 0) {
                         return null;
                     }
-                    if (log.isDebugEnabled()) log.debug("evicting page in file " + pte.addressSpace.file.getPath() + " at address " + ((long)pte.index << PAGE_BITS));
+                    if (log.isDebugEnabled())
+                        log.debug("evicting page in file " + pte.addressSpace.file.getPath() + " at address " + ((long) pte.index << PAGE_BITS));
                     if (pte.dirty) {
                         syncPage(index);
                     }
@@ -504,10 +511,12 @@ public final class BloomFilter {
 
             /**
              * gets memory for a page if it is currently paged in and increments its refcount
+             *
              * @param address address of page
              * @return memory for page or null if it is not currently paged in
              */
-            public @Nullable Memory getPage(long address) {
+            public @Nullable
+            Memory getPage(long address) {
                 final PageTableEntry pageTableEntry = getPageTableEntry(address);
                 synchronized (pageTableEntry) {
                     pageTableEntry.requestsCounter++;
@@ -521,11 +530,13 @@ public final class BloomFilter {
 
             /**
              * gets memory for a page, sets dirty bit, and increments its refcount
+             *
              * @param address address of page
              * @return memory for page or null if there is no memory available at this time
              * @throws IOException if page is paged out and an IOException occurs attempting to page it in
              */
-            public @Nullable Memory getPageForWriting(long address) throws IOException {
+            public @Nullable
+            Memory getPageForWriting(long address) throws IOException {
                 final PageTableEntry pte = getPageTableEntry(address);
                 synchronized (pte) {
                     if (pte.memory != null) {
@@ -539,7 +550,7 @@ public final class BloomFilter {
                 final Memory ret;
                 synchronized (pte) {
                     if (pte.memory == null) {
-                        loadPage((int)(address >>> PAGE_BITS), freePage);
+                        loadPage((int) (address >>> PAGE_BITS), freePage);
                         pte.memory = freePage;
                         ret = freePage;
                     } else {
@@ -558,6 +569,7 @@ public final class BloomFilter {
 
             /**
              * decrements refcount for a page
+             *
              * @param address address of page
              */
             public void releasePage(long address) {
@@ -578,6 +590,7 @@ public final class BloomFilter {
             /**
              * writing to currently referenced pages during or after this call will result in undefined behaviour. you must call
              * getPageForWriting again after this call to set the dirty bit again.
+             *
              * @throws IOException in exceptional circumstances
              */
             public void sync() throws IOException {
@@ -594,6 +607,7 @@ public final class BloomFilter {
 
             /**
              * writing to or reading from referenced pages after this call will result in undefined behaviour
+             *
              * @throws IOException in exceptional circumstances
              */
             @Override
@@ -608,13 +622,14 @@ public final class BloomFilter {
                         final Memory freePage;
                         synchronized (pte) {
                             if (pte.memory != null) {
-                                final long address = (long)pte.index << PAGE_BITS;
-                                if (log.isDebugEnabled()) log.debug("evicting page in file "+file.getPath()+" at address "+ address);
+                                final long address = (long) pte.index << PAGE_BITS;
+                                if (log.isDebugEnabled())
+                                    log.debug("evicting page in file " + file.getPath() + " at address " + address);
                                 if (pte.dirty) {
-                                    log.error("page in file "+file.getPath()+" at address "+address+" is dirty");
+                                    log.error("page in file " + file.getPath() + " at address " + address + " is dirty");
                                 }
                                 if (pte.refCount > 0) {
-                                    log.error("page in file "+file.getPath()+" at address "+address+" is still in use, refcount: "+pte.refCount);
+                                    log.error("page in file " + file.getPath() + " at address " + address + " is still in use, refcount: " + pte.refCount);
                                 }
                             }
                             freePage = pte.memory;
