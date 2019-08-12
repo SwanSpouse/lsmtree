@@ -78,8 +78,9 @@ public final class BasicRecordFile<E> implements RecordFile<E> {
     public RecordFile.Reader<E> reader(long address) throws IOException {
         return new Reader(address);
     }
-    
+
     private Option<E> readAndCheck(long address, MutableLong nextElementStart) throws IOException {
+        // [0,1,2,3] 4个byte是总长度
         if (address+4 > memory.length()) {
             throw new ConsistencyException("not enough bytes in file");
         }
@@ -87,23 +88,30 @@ public final class BasicRecordFile<E> implements RecordFile<E> {
         if (length < 0) {
             return Option.none();
         }
+        // [5,6,7,8] 4个byte是checksum
         if (address+8 > memory.length()) {
             throw new ConsistencyException("not enough bytes in file");
         }
+        // 查看数据是否超出了范围
         if (address+8+length > memory.length()) {
             throw new ConsistencyException("not enough bytes in file");
         }
+        // 获取checksum
         final int checksum = memory.getInt(address+4);
+
         MemoryDataInput in = new MemoryDataInput(memory);
         in.seek(address+8);
         CRC32 crc32 = new CRC32();
         crc32.update(CRC_SEED);
         byte[] bytes = new byte[length];
         in.readFully(bytes);
+        // 计算并验证checksum
         crc32.update(bytes);
         if ((int)crc32.getValue() != checksum) {
             throw new ConsistencyException("checksum for record does not match: expected "+checksum+" actual "+(int)crc32.getValue());
         }
+
+        // TODO 最后这里在搞啥，没看懂
         E ret = serializer.read(ByteStreams.newDataInput(bytes));
         if (nextElementStart != null) nextElementStart.setValue(address+8+length);
         return Option.some(ret);

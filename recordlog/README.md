@@ -3,28 +3,44 @@
 ## About
 Recordlog is a library for reading and writing data to record logs. Many records are stored together in a `RecordFile`.
 
+Recordlog 用来读取record logs 数据。 records 数据都存放在 RecordFile 中
+
 ## API Documentation
 `RecordFile` is a generic interface for a collection of byte arrays to be addressed by 64 bit pointers.
 
+`RecordFile` 是一个通用接口，可以返回被64位指针定位的byte数组
+
 `RecordFile.Reader` provides iteration over a RecordFile and can start seeked to a position.
+
+`RecordFile.Reader` 提供了可以从指定位置遍历RecordFile的迭代器
+
 `RecordFile.Reader` has the following methods:
 
 `boolean next()`
 Seeks to next entry, returns true if one exists
 
+获取下一个Entry，如果存在的话就返回true
+
 `long getPosition()`
 Returns position of current entry
 
+返回当前Entry的位置
+
 `E get()`
 Gets value of current entry
+
+获取当前Entry的值
 
 `RecordFile.Writer` provides one method:
 
 `long append(E entry)`
 Appends the entry provided to the file and return the address used for accessing it later
 
+将Entry添加到文件末尾，同时返回可以访问此Entry的地址。
 
 There are three implementations of `RecordFile`.
+
+RecordFile有如下3中实现：
 
 `BasicRecordFile` stores entries sequentially as serialized entry byte length, CRC32 checksum, entry bytes.
 
