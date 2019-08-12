@@ -41,6 +41,7 @@ public final class VolatileGeneration<K, V> implements Generation<K, V> {
 
     private static final Logger log = Logger.getLogger(VolatileGeneration.class);
 
+    // WAL的Log
     private final TransactionLog.Writer transactionLog;
 
     private final Object deleted;

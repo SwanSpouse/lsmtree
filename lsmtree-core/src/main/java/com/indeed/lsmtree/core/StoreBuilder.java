@@ -43,13 +43,17 @@ public final class StoreBuilder<K, V> {
     private boolean mlockBloomFilters = false;
     private long bloomFilterMemory = 1024 * 1024 * 32;
 
-    // 类似于创建一个数据库
+    // 类似于创建一个数据库，文件
+    // File root 数据库路径
+    // Serializer<K> Key序列化方法
+    // Serializer<K> Value序列化方法
     public StoreBuilder(final File root, final Serializer<K> keySerializer, final Serializer<V> valueSerializer) {
         this.root = root;
         this.keySerializer = keySerializer;
         this.valueSerializer = valueSerializer;
     }
 
+    // 获取、设置比较器
     public Comparator<K> getComparator() {
         return comparator;
     }
@@ -68,6 +72,7 @@ public final class StoreBuilder<K, V> {
         return this;
     }
 
+    // 设置、获取存储数据的类型。是inline还是compressed
     public StorageType getStorageType() {
         return storageType;
     }
@@ -77,6 +82,7 @@ public final class StoreBuilder<K, V> {
         return this;
     }
 
+    // 编码方式
     public CompressionCodec getCodec() {
         return codec;
     }
@@ -86,6 +92,7 @@ public final class StoreBuilder<K, V> {
         return this;
     }
 
+    // 是否是read only，不知道这有啥用
     public boolean isReadOnly() {
         return readOnly;
     }

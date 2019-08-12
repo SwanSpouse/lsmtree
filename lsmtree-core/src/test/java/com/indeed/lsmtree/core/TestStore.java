@@ -46,6 +46,7 @@ public final class TestStore extends TestCase {
 
     @Override
     public void setUp() throws Exception {
+        // 为测试创建tmp目录
         tmpDir = File.createTempFile("tmp", "", new File("."));
         tmpDir.delete();
         tmpDir.mkdirs();
@@ -55,6 +56,7 @@ public final class TestStore extends TestCase {
 
     @Override
     public void tearDown() throws Exception {
+        // 删除测试的临时目录
         FileUtils.deleteDirectory(tmpDir);
     }
 
@@ -65,6 +67,7 @@ public final class TestStore extends TestCase {
 
     // 测试compressed存储方式
     public void testBlockCompressed() throws Exception {
+        // 获取一种压缩的编码方式
         final SnappyCodec codec = new SnappyCodec();
         testStore(StorageType.BLOCK_COMPRESSED, codec);
     }
@@ -76,7 +79,8 @@ public final class TestStore extends TestCase {
         File indexLink = new File(tmpDir, "indexlink");
         PosixFileOperations.link(indexDir, indexLink);
         File storeDir = new File(indexLink, "store");
-        // 构造一个数据库
+
+        // 构造一个数据库，Key是Integer Value是Long
         Store<Integer, Long> store = new StoreBuilder<Integer, Long>(storeDir, new IntSerializer(), new LongSerializer()).setMaxVolatileGenerationSize(8 * 1024 * 1024).setStorageType(storageType).setCodec(codec).build();
         // 随机生成一个数组
         final Random r = new Random(0);
@@ -95,8 +99,10 @@ public final class TestStore extends TestCase {
         }
         store.close();
         store.waitForCompactions();
+
         store = new StoreBuilder<Integer, Long>(storeDir, new IntSerializer(), new LongSerializer()).setMaxVolatileGenerationSize(8 * 1024 * 1024).setStorageType(storageType).setCodec(codec).build();
         Arrays.sort(ints);
+        // 获取迭代器，然后再次验证Store中的数据
         Iterator<Store.Entry<Integer, Long>> iterator = store.iterator();
         int index = 0;
         while (iterator.hasNext()) {
@@ -108,9 +114,12 @@ public final class TestStore extends TestCase {
                 index++;
             }
         }
+        // 验证个数相等
         assertTrue(index == ints.length);
+        // 搞一个BitSet来记录删除的数据
         final BitSet deleted = new BitSet();
         for (int i = 0; i < ints.length / 10; i++) {
+            // 随机删除
             int deletionIndex = r.nextInt(ints.length);
             deleted.set(deletionIndex, true);
             for (int j = deletionIndex - 1; j >= 0; j--) {
@@ -130,6 +139,7 @@ public final class TestStore extends TestCase {
             store.delete(ints[deletionIndex]);
             assertNull(store.get(ints[deletionIndex]));
         }
+        // 遍历数据库，看未删除的数据是不是还都在
         iterator = store.iterator();
         index = 0;
         while (iterator.hasNext()) {
@@ -142,12 +152,15 @@ public final class TestStore extends TestCase {
                 index++;
             }
         }
+        // 验证删除的个数是不是相等
         while (deleted.get(index)) index++;
         assertTrue(index == ints.length);
         final int max = ints[ints.length - 1];
+        // 启动8个线程，验证并发条件下的数据库是否正确
         final AtomicInteger done = new AtomicInteger(8);
         for (int i = 0; i < done.get(); i++) {
             final int thread = i;
+            // 创建一个数据库，
             final Store<Integer, Long> finalStore = store;
             new Thread(new Runnable() {
                 @Override
@@ -155,6 +168,7 @@ public final class TestStore extends TestCase {
                     try {
                         Random r = new Random(thread);
                         for (int i = 0; i < treeSize; i++) {
+                            // 在ints里面随机取一个数，返回它的index
                             int rand = r.nextInt();
                             int insertionindex = Arrays.binarySearch(ints, rand);
 

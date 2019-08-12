@@ -346,7 +346,7 @@ public final class Store<K, V> implements Closeable {
 
     // 执行相应函数，主要是在函数外面封装了一层状态
     private <A, B> A doWithState(F2<GenerationState<K, V>, B, A> function, @Nullable B b) throws IOException {
-        // 获取状态？
+        // 获取generationState 的副本
         final SharedReference<GenerationState<K, V>> localState = generationState.getCopy();
         try {
             if (localState == null) {
@@ -363,21 +363,23 @@ public final class Store<K, V> implements Closeable {
         }
     }
 
-    // TODO @lmj <B> 这个地方没咋看懂，已经不是太熟悉Java了。
+    // B是要写入的Entry， function是要操作的函数
     private <B> void doUntilSuccessful(F2<GenerationState<K, V>, B, Boolean> function, B b) throws IOException {
-        // TODO @lmj 在这里会进行不断的重试吗？
         while (!doWithState(function, b)) ;
     }
 
+    // 根据key查找value
     private final F2<GenerationState<K, V>, K, V> get = new F2<GenerationState<K, V>, K, V>() {
         @Override
         public @Nullable
         V f(GenerationState<K, V> localState, K key) {
+            // 首先在volatile里面找
             Generation.Entry<K, V> getResult = localState.volatileGeneration.get(key);
             if (getResult != null) {
                 if (getResult.isDeleted()) return null;
                 return getResult.getValue();
             }
+            // 如果找到不到才会去stableGeneration里面来找
             for (Generation<K, V> stableGeneration : localState.stableGenerations) {
                 getResult = stableGeneration.get(key);
                 if (getResult != null) {
@@ -440,10 +442,11 @@ public final class Store<K, V> implements Closeable {
                     // 把keyValue放入到localState中
                     localState.volatileGeneration.put(keyValue.getKey(), keyValue.getValue());
                 } catch (IOException e) {
-                    // 没放进去的话进行compact
+                    // 如果发现异常，会触发一次compact
                     compactor.compact();
                     throw e;
                 }
+                // 超过限制的话也会触发一次compact。
                 if (localState.volatileGeneration.sizeInBytes() > maxVolatileGenerationSize) {
                     compactor.compact();
                 }
@@ -466,6 +469,7 @@ public final class Store<K, V> implements Closeable {
      */
     // 将数据存入数据库
     public void put(K key, V value) throws IOException {
+        // 一直执行put 方法，直到 Entry写入成功
         doUntilSuccessful(put, new Entry<K, V>(key, value));
     }
 
@@ -506,8 +510,11 @@ public final class Store<K, V> implements Closeable {
 
     private static <K, V> MergingIterator<K, V> getMergedIterator(GenerationState<K, V> state, Function<Generation<K, V>, Iterator<Generation.Entry<K, V>>> f, Comparator<K> comp) {
         final List<Generation<K, V>> generations = Lists.newArrayList();
+        // 把valotile里面的数据都塞进去
         generations.add(state.volatileGeneration);
+        // 再把stableGenerations的数据都塞进去
         generations.addAll(state.stableGenerations);
+        // 在这里进行compact？？？
         return new MergingIterator<K, V>(Lists.transform(generations, f), comp);
     }
 
@@ -1266,7 +1273,6 @@ public final class Store<K, V> implements Closeable {
         }
     }
 
-    // TODO @lmj generation state是啥意思？这部分代码没看懂。这里是存放所有的数据的吗?
     private static final class GenerationState<K, V> implements Closeable {
         private final List<SharedReference<? extends Generation<K, V>>> stableGenerationReferences;
         private final SharedReference<VolatileGeneration<K, V>> volatileGenerationReference;
