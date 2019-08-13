@@ -53,6 +53,7 @@ public final class StableGeneration {
         }
     }
 
+    // 按行存储的Key-Value数据集
     public static class InlineStableGeneration<K, V> implements Generation<K, V> {
 
         private final BloomFilter.Reader bloomFilter;
@@ -63,7 +64,9 @@ public final class StableGeneration {
 
         public InlineStableGeneration(BloomFilter.MemoryManager memoryManager, File file, Comparator<K> comparator, Serializer<K> keySerializer, Serializer<V> valueSerializer, final boolean mlockBTree) throws IOException {
             this.file = file;
+            // 创建一个reader
             reader = new ImmutableBTreeIndex.Reader(file, comparator, keySerializer, valueSerializer, mlockBTree);
+            // 如果存在bloomfilter.bin的话就初始化一个bloomfilter
             final File bloomFilterFile = new File(file, "bloomfilter.bin");
             if (bloomFilterFile.exists()) {
                 bloomFilter = new BloomFilter.Reader(memoryManager, bloomFilterFile, keySerializer);
@@ -72,8 +75,11 @@ public final class StableGeneration {
             }
         }
 
+        // 判断文件中是否有当前key对应的值
         @Override
         public Entry<K, V> get(final K key) {
+            // 如果存在bloomFilter的话，就使用BloomFilter判断一下Key是不是存在
+            // 如果BloomFilter判断不存在，那么一定不存在;
             if (bloomFilter == null || bloomFilter.contains(key)) {
                 return reader.get(key);
             }
@@ -87,51 +93,61 @@ public final class StableGeneration {
             return entry == null ? null : (entry.isDeleted() ? Boolean.TRUE : Boolean.FALSE);
         }
 
+        // 获取从头到end的所有值，inclusive表示是否包括end这个值
         @Override
         public Generation<K, V> head(K end, boolean inclusive) {
             return reader.head(end, inclusive);
         }
 
+        // 获取从start到末尾的所有值，inclusive表示是否包括start这个值
         @Override
         public Generation<K, V> tail(K start, boolean inclusive) {
             return reader.tail(start, inclusive);
         }
 
+        // 相当于scan，获取start,end区间范围内的所有值
         @Override
         public Generation<K, V> slice(K start, boolean startInclusive, K end, boolean endInclusive) {
             return reader.slice(start, startInclusive, end, endInclusive);
         }
 
+        // 反向遍历
         @Override
         public Generation<K, V> reverse() {
             return reader.reverse();
         }
 
+        // 返回迭代器
         @Override
         public Iterator<Entry<K, V>> iterator() {
             return reader.iterator();
         }
 
+        // 返回从start开始的迭代器
         @Override
         public Iterator<Entry<K, V>> iterator(K start, boolean startInclusive) {
             return reader.iterator(start, startInclusive);
         }
 
+        // 逆序迭代
         @Override
         public Iterator<Entry<K, V>> reverseIterator() {
             return reader.reverseIterator();
         }
 
+        // 从start开始到末尾，然后反向迭代
         @Override
         public Iterator<Entry<K, V>> reverseIterator(K start, boolean startInclusive) {
             return reader.reverseIterator(start, startInclusive);
         }
 
+        // 比较器
         @Override
         public Comparator<K> getComparator() {
             return reader.getComparator();
         }
 
+        // 长度
         @Override
         public long size() {
             return reader.size();
@@ -170,12 +186,15 @@ public final class StableGeneration {
         }
     }
 
+    // 压缩存储的Key-Value数据集
     public static class BlockCompressedStableGeneration<K, V> implements Generation<K, V> {
 
         private final BloomFilter.Reader bloomFilter;
 
+        // TODO 这个里面存储的是索引？
         private final ImmutableBTreeIndex.Reader<K, Long> reader;
 
+        // Value存放的文件
         private final BlockCompressedRecordFile<V> recordFile;
 
         private final File file;
@@ -184,14 +203,12 @@ public final class StableGeneration {
 
         private final SharedReference<Closeable> stuffToClose;
 
-        public BlockCompressedStableGeneration(
-                BloomFilter.MemoryManager memoryManager, File file, Comparator<K> comparator, Serializer<K> keySerializer, Serializer<V> valueSerializer, final CompressionCodec codec, final boolean mlockBTree
-        ) throws IOException {
+        public BlockCompressedStableGeneration(BloomFilter.MemoryManager memoryManager, File file, Comparator<K> comparator,
+                                               Serializer<K> keySerializer, Serializer<V> valueSerializer, final CompressionCodec codec, final boolean mlockBTree) throws IOException {
             this.file = file;
             reader = new ImmutableBTreeIndex.Reader(file, comparator, keySerializer, new LongSerializer(), mlockBTree);
             final File valuesFile = new File(file, "values.bin");
-            recordFile =
-                    new BlockCompressedRecordFile.Builder(valuesFile, valueSerializer, codec).setMlockFiles(mlockBTree).build();
+            recordFile = new BlockCompressedRecordFile.Builder(valuesFile, valueSerializer, codec).setMlockFiles(mlockBTree).build();
             final File bloomFilterFile = new File(file, "bloomfilter.bin");
             if (bloomFilterFile.exists()) {
                 bloomFilter = new BloomFilter.Reader(memoryManager, bloomFilterFile, keySerializer);
