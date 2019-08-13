@@ -11,7 +11,7 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
- package com.indeed.lsmtree.core;
+package com.indeed.lsmtree.core;
 
 import com.indeed.util.serialization.IntSerializer;
 import com.indeed.util.serialization.LongSerializer;
@@ -26,8 +26,8 @@ import java.util.Arrays;
 import java.util.Iterator;
 
 /**
-* @author jplaisance
-*/
+ * @author jplaisance
+ */
 public final class TestZeroData extends TestCase {
 
     private static final Logger log = Logger.getLogger(TestZeroData.class);
@@ -46,6 +46,7 @@ public final class TestZeroData extends TestCase {
         FileUtils.deleteDirectory(tmpDir);
     }
 
+    // 验证空文件
     public void testEmpty() throws IOException {
         VolatileGeneration<Integer, Long> generation = new VolatileGeneration<Integer, Long>(new File(tmpDir, "log.log"), new IntSerializer(), new LongSerializer(), new ComparableComparator());
         final File indexDir = new File(tmpDir, "indexdir");
@@ -55,6 +56,7 @@ public final class TestZeroData extends TestCase {
         assertFalse(iterator.hasNext());
     }
 
+    // 验证所有数据都被删除的情况
     public void testAllDeletes() throws IOException, TransactionLog.LogClosedException {
         VolatileGeneration<Integer, Long> generation = new VolatileGeneration<Integer, Long>(new File(tmpDir, "log.log"), new IntSerializer(), new LongSerializer(), new ComparableComparator());
         for (int i = 0; i < 10000; i++) {
@@ -71,10 +73,12 @@ public final class TestZeroData extends TestCase {
     }
 
     public void testAllDeletedInYoungGeneration() throws IOException, TransactionLog.LogClosedException {
+        // 生成1w条数据
         VolatileGeneration<Integer, Long> generation = new VolatileGeneration<Integer, Long>(new File(tmpDir, "log1.log"), new IntSerializer(), new LongSerializer(), new ComparableComparator());
         for (int i = 0; i < 10000; i++) {
-            generation.put(i, (long)i);
+            generation.put(i, (long) i);
         }
+
         final File indexDir1 = new File(tmpDir, "indexdir1");
         ImmutableBTreeIndex.Writer.write(indexDir1, generation.iterator(), new IntSerializer(), new LongSerializer(), 65536, false);
         ImmutableBTreeIndex.Reader<Integer, Long> reader = new ImmutableBTreeIndex.Reader<Integer, Long>(indexDir1, new IntSerializer(), new LongSerializer(), false);
@@ -82,6 +86,7 @@ public final class TestZeroData extends TestCase {
         for (int i = 0; i < 10000; i++) {
             generation.delete(i);
         }
+
         final File indexDir2 = new File(tmpDir, "indexDir2");
         MergingIterator<Integer, Long> merged = new MergingIterator<Integer, Long>(Arrays.asList(generation.iterator(), reader.iterator()), new ComparableComparator());
         ImmutableBTreeIndex.Writer.write(indexDir2, merged, new IntSerializer(), new LongSerializer(), 65536, false);

@@ -37,12 +37,14 @@ public final class TransactionLog {
 
         private final BasicRecordFile<OpKeyValue<K, V>> recordFile;
         private final RecordFile.Reader<OpKeyValue<K, V>> reader;
-        private boolean done;
+        private boolean done; // 用于标识是否读完
+        // 以下3个字段用于标识当前的Entry
         private TransactionType type;
         private K key;
         private V value;
 
         public Reader(File path, Serializer<K> keySerializer, Serializer<V> valueSerializer) throws IOException {
+            // 创建一个reader
             recordFile = new BasicRecordFile<OpKeyValue<K, V>>(path, new OpKeyValueSerialzer<K, V>(keySerializer, valueSerializer));
             reader = recordFile.reader();
         }
@@ -59,9 +61,11 @@ public final class TransactionLog {
                 done = true;
                 return false;
             }
+            // 读取数据
             final OpKeyValue<K, V> opKeyValue = reader.get();
             type = opKeyValue.type;
             key = opKeyValue.key;
+            // 如果这个Type是PUT的话，value不是停留在上一个的值上面了吗？如果是DELETE这里应该给null吧。
             if (type == TransactionType.PUT) {
                 value = opKeyValue.value;
             }
@@ -82,6 +86,7 @@ public final class TransactionLog {
 
         @Override
         public void close() throws IOException {
+            // 现在close文件都是这种操作了吗？
             final Closer closer = Closer.create();
             closer.register(reader);
             closer.register(recordFile);
@@ -178,6 +183,7 @@ public final class TransactionLog {
         }
     }
 
+    // 枚举类型，用来标识TransactionType
     public static enum TransactionType {
         PUT(1),
         DELETE(2);
@@ -204,6 +210,7 @@ public final class TransactionLog {
         }
     }
 
+    // 基本的Key Value 结构，用TransactionType来标识是否删除
     private static final class OpKeyValue<K, V> {
         TransactionType type;
         K key;
@@ -228,8 +235,11 @@ public final class TransactionLog {
 
         @Override
         public void write(OpKeyValue<K, V> kvOpKeyValue, DataOutput out) throws IOException {
+            // 先写入这个数据是PUT还是DELETE
             out.writeByte(kvOpKeyValue.type.getTransactionTypeId());
+            // 再写入KEY
             keySerializer.write(kvOpKeyValue.key, out);
+            // 如果是PUT的话，还要再写入VALUE，
             if (kvOpKeyValue.type == TransactionType.PUT) {
                 valueSerializer.write(kvOpKeyValue.value, out);
             }
@@ -237,9 +247,12 @@ public final class TransactionLog {
 
         @Override
         public OpKeyValue<K, V> read(DataInput in) throws IOException {
+            // 首先读入Type
             final TransactionType type = TransactionType.getTransactionType(in.readByte());
+            // 读取Key
             final K key = keySerializer.read(in);
             V value = null;
+            // 如果是PUT再读取VALUE
             if (type == TransactionType.PUT) {
                 value = valueSerializer.read(in);
             }

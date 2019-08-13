@@ -125,9 +125,11 @@ public class GenericRecordLogAppender<T> {
         return new DateTime(getMaxSegmentTimestamp()).toString();
     }
 
+    // 从文件中读取meta data
     private static Map<String, String> readMetadata(File metadataPath, ObjectMapper mapper) throws IOException {
         if (metadataPath.exists()) {
             Map<String, String> ret = Maps.newLinkedHashMap();
+            // 把整个文件都搂进来，然后进行遍历，并存储到ret中
             JsonNode node = mapper.readTree(Files.toString(metadataPath, Charsets.UTF_8));
             Iterator<Map.Entry<String, JsonNode>> iterator = node.getFields();
             while (iterator.hasNext()) {
@@ -187,11 +189,13 @@ public class GenericRecordLogAppender<T> {
         if (!f.exists()) {
             return defaultVal;
         } else {
+            // 这个文件里面就存一个long吗?
             RandomAccessFile in = new RandomAccessFile(f, "r");
             int length = (int) in.length();
             byte[] bytes = new byte[length];
             in.readFully(bytes);
             in.close();
+            // 读取出来之后进行trim，然后转成long
             return Long.parseLong(new String(bytes, Charsets.UTF_8).trim());
         }
     }
@@ -204,11 +208,14 @@ public class GenericRecordLogAppender<T> {
      * @throws IOException if an I/O error occurs
      */
     public static void writeStringToFile(File f, String str) throws IOException {
+        // 首先创建一个.next文件
         File nextPath = new File(f.getParentFile(), f.getName() + ".next");
+        // 将数据写入到.next文件中
         BufferedFileDataOutputStream out = new BufferedFileDataOutputStream(nextPath);
         out.write(str.getBytes(Charsets.UTF_8));
         out.sync();
         out.close();
+        // 再将.next文件进行重命名
         nextPath.renameTo(f);
     }
 }

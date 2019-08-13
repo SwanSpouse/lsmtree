@@ -36,14 +36,20 @@ import java.util.concurrent.ConcurrentSkipListMap;
 
 /**
  * @author jplaisance
+ * <p>
+ * 感觉这个是LSM的基本结构，包含了内存中的结构memtable，map；同时也包含了磁盘中的结构，TransactionLog
+ * <p>
+ * 但是现在不是很清楚，这个TransactionLog是做WAL用的还是SSTable
  */
 public final class VolatileGeneration<K, V> implements Generation<K, V> {
 
     private static final Logger log = Logger.getLogger(VolatileGeneration.class);
 
-    // WAL的Log
+    // WAL的Log 这个不应该是WAL的Log，这个应该就是SSTable，在磁盘上的数据结构
+    // 感觉又好像是WAL
     private final TransactionLog.Writer transactionLog;
 
+    // 占位符，被删除Key的Value
     private final Object deleted;
 
     // 存放key value的map
@@ -52,8 +58,8 @@ public final class VolatileGeneration<K, V> implements Generation<K, V> {
 
     private final File logPath;
 
+    // Key Value使用的序列化
     private final Serializer<K> keySerializer;
-
     private final Serializer<V> valueSerializer;
 
     private final Ordering<K> ordering;
@@ -65,6 +71,7 @@ public final class VolatileGeneration<K, V> implements Generation<K, V> {
     }
 
     public VolatileGeneration(File logPath, Serializer<K> keySerializer, Serializer<V> valueSerializer, Comparator<K> comparator, boolean loadExistingReadOnly) throws IOException {
+        // 从比较器里面可以获取到顺序
         this.ordering = Ordering.from(comparator);
         map = new ConcurrentSkipListMap(comparator);
         this.logPath = logPath;
@@ -73,11 +80,13 @@ public final class VolatileGeneration<K, V> implements Generation<K, V> {
         deleted = new Object();
         if (loadExistingReadOnly) {
             if (!logPath.exists()) throw new IllegalArgumentException(logPath.getAbsolutePath() + " does not exist");
+            // 如果是ReadOnly的话，就不会往TransactionLog里面写东西
             transactionLog = null;
             replayTransactionLog(logPath, true);
         } else {
             if (logPath.exists())
                 throw new IllegalArgumentException("to load existing logs set loadExistingReadOnly to true or create a new log and use replayTransactionLog");
+            // 创建一个新的TransactionLog
             transactionLog = new TransactionLog.Writer(logPath, keySerializer, valueSerializer, false);
         }
         stuffToClose = SharedReference.create((Closeable) new Closeable() {
@@ -87,13 +96,16 @@ public final class VolatileGeneration<K, V> implements Generation<K, V> {
         });
     }
 
+    // 重放TransactionLog，把TransactionLog中的数据加载到内存中
     public void replayTransactionLog(File path) throws IOException {
         replayTransactionLog(path, false);
     }
 
     private void replayTransactionLog(File path, boolean readOnly) throws IOException {
+        // 首先初始化Reader
         final TransactionLog.Reader<K, V> reader = new TransactionLog.Reader(path, keySerializer, valueSerializer);
         try {
+            // 依次遍历TransactionLog，把数据加载到内存map里面
             while (reader.next()) {
                 final K key = reader.getKey();
                 switch (reader.getType()) {
@@ -195,6 +207,7 @@ public final class VolatileGeneration<K, V> implements Generation<K, V> {
             boolean initialized = false;
             K key;
 
+            // 获取下一个Entry
             @Override
             protected Entry<K, V> computeNext() {
                 final Map.Entry<K, Object> entry;
@@ -290,6 +303,7 @@ public final class VolatileGeneration<K, V> implements Generation<K, V> {
         return logPath;
     }
 
+    // 从logPath文件读取65535个字节，拷贝到checkPointPath/logPath文件中。
     @Override
     public void checkpoint(final File checkpointPath) throws IOException {
         BufferedFileDataOutputStream out = null;

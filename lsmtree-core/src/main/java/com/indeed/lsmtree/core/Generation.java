@@ -11,7 +11,7 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
- package com.indeed.lsmtree.core;
+package com.indeed.lsmtree.core;
 
 import com.google.common.base.Preconditions;
 
@@ -24,18 +24,22 @@ import java.util.Iterator;
 
 /**
  * @author jplaisance
+ * <p>
+ * 这个是在内存里面的一组Entry，
  */
-public interface Generation<K,V> extends Closeable {
-    public @Nullable Entry<K,V> get(K key);
+public interface Generation<K, V> extends Closeable {
+    public @Nullable
+    Entry<K, V> get(K key);
 
-    public @Nullable Boolean isDeleted(K key);
+    public @Nullable
+    Boolean isDeleted(K key);
 
     public Generation<K, V> head(K end, boolean inclusive);
 
     public Generation<K, V> tail(K start, boolean inclusive);
-    
+
     public Generation<K, V> slice(K start, boolean startInclusive, K end, boolean endInclusive);
-    
+
     public Generation<K, V> reverse();
 
     public Iterator<Entry<K, V>> iterator();
@@ -62,11 +66,13 @@ public interface Generation<K,V> extends Closeable {
 
     public static final class Entry<K, V> {
 
-        public static <K,V> Entry<K,V> createDeleted(K key) {
+        // 创建一条删除记录
+        public static <K, V> Entry<K, V> createDeleted(K key) {
             return new Entry<K, V>(key, null);
         }
 
-        public static <K,V> Entry<K,V> create(K key, V value) {
+        // 创建一条数据记录
+        public static <K, V> Entry<K, V> create(K key, V value) {
             return new Entry<K, V>(key, value);
         }
 
@@ -82,6 +88,7 @@ public interface Generation<K,V> extends Closeable {
             return key;
         }
 
+        // 如果获取的是DELETE记录的value，在这里会报Exception
         public V getValue() {
             return Preconditions.checkNotNull(value);
         }
