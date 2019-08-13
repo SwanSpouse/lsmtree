@@ -39,6 +39,7 @@ public final class StableGeneration {
 
     private static final Logger log = Logger.getLogger(StableGeneration.class);
 
+    // 打开数据文件
     public static <K, V> Generation<K, V> open(BloomFilter.MemoryManager memoryManager, File file, Comparator<K> comparator, Serializer<K> keySerializer, Serializer<V> valueSerializer, StorageType storageType, CompressionCodec codec, final boolean mlockBTree)
             throws IOException {
         if (storageType == StorageType.BLOCK_COMPRESSED && codec == null)

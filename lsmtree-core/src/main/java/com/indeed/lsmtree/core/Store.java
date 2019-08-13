@@ -85,24 +85,30 @@ public final class Store<K, V> implements Closeable {
 
     private final AtomicLong lastUsedTimeStamp;
 
+    // Key Value 序列化用
     private final Serializer<K> keySerializer;
-
     private final Serializer<V> valueSerializer;
 
+    // 比较器
     private final Ordering<K> comparator;
 
     private final long maxVolatileGenerationSize;
 
     private final Compactor compactor;
 
+    // 锁，如果是只读的话，会加一个锁
     private final File lockFile;
 
+    // 以何种方式进行数据存储，压缩与否等
     private final StorageType storageType;
 
+    // 压缩算法
     private final CompressionCodec codec;
 
+    // 总空间
     private final AtomicLong totalGenerationSpace = new AtomicLong(0);
 
+    // 保留空间
     private final AtomicLong reservedCompactionSpace = new AtomicLong(0);
 
     private final long reservedSpaceThreshold;
@@ -170,10 +176,12 @@ public final class Store<K, V> implements Closeable {
                 if (!lockFileLock.createNewFile()) {
                     throw new IOException(lockFileLock.getAbsolutePath() + " is already locked");
                 }
+                // 这个lockFile里面存放进程的pid
                 final File lockFile = new File(root, "write.lock");
                 // 判断是否已经上锁了
                 if (lockFile.exists()) {
                     final Integer pid = PosixFileOperations.tryParseInt(Files.toString(lockFile, Charsets.UTF_8));
+                    // 如果进程已经不存在了，则会删除lockFileLock
                     if (pid == null || PosixFileOperations.isProcessRunning(pid, true)) {
                         lockFileLock.delete();
                         throw new IOException(lockFile.getAbsolutePath() + " is already locked");
@@ -183,12 +191,14 @@ public final class Store<K, V> implements Closeable {
                 Files.write(String.valueOf(PosixFileOperations.getPID()), lockFile, Charsets.UTF_8);
                 lockFileLock.delete();
                 this.lockFile = lockFile;
+                // 这个是系统的方法？？？好屌
                 this.lockFile.deleteOnExit();
             } catch (IOException e) {
                 log.error("problem locking lsmtree in directory " + root.getAbsolutePath(), e);
                 throw e;
             }
         } else {
+            // 如果不是readOnly的，则lockFile是null
             lockFile = null;
         }
         this.root = root;
@@ -200,6 +210,7 @@ public final class Store<K, V> implements Closeable {
         generationState = AtomicSharedReference.create();
         // 数据目录
         dataDir = new File(root, "data");
+        // 在这里创建了几个数组，暂时理解为nextVolatileGeneration存放的是内存中的数据，底层还有WAL，写数据的时候先写LOG再写内存
         final VolatileGeneration<K, V> nextVolatileGeneration;
         final List<Generation<K, V>> stableGenerations = new ArrayList<Generation<K, V>>();
         final List<File> toDelete = new ArrayList<File>();
@@ -214,24 +225,35 @@ public final class Store<K, V> implements Closeable {
             } else {
                 // 如果数据目录存在的话
                 long maxTimestamp = 0;
+                // 从root文件中进行遍历，找到时间戳最大 TODO，研究一下这俩文件夹下存储的都是什么信息
                 maxTimestamp = findMaxTimestamp(root, maxTimestamp);
                 maxTimestamp = findMaxTimestamp(dataDir, maxTimestamp);
+
+                // 设置lastUsedTimestamp
                 lastUsedTimeStamp.set(maxTimestamp);
+                // 在root目录下创建latest
                 final File latestDir = new File(root, "latest");
+                // 在latest目录下创建state
                 final File state = new File(latestDir, "state");
+                // 从state文件中加载配置
                 final Yaml yaml = new Yaml();
                 final Reader reader = new InputStreamReader(new FileInputStream(state));
                 final Map<String, Object> map = (Map<String, Object>) yaml.load(reader);
                 Closeables2.closeQuietly(reader, log);
+                // 从map中读取配置的文件名，然后创建一个volatileGenerationFile
                 final File volatileGenerationFile = new File(latestDir, (String) map.get("volatileGeneration"));
+                // 从map中读取配置的一系列文件
                 final List<String> oldStableGenerations = (List<String>) map.get("stableGenerations");
+                // 如果是只读的话，加载一些列数据
                 if (readOnly) {
                     nextVolatileGeneration = new VolatileGeneration<K, V>(volatileGenerationFile, keySerializer, valueSerializer, comparator, true);
                     for (String generationName : oldStableGenerations) {
                         final File generationFile = new File(latestDir, generationName);
+                        // .log 结尾的文件用VolatileGeneration
                         if (generationName.endsWith(".log")) {
                             stableGenerations.add(new VolatileGeneration(getDataFile(generationFile), keySerializer, valueSerializer, comparator, true));
                         } else {
+                            // 其他文件用StableGeneration
                             stableGenerations.add(StableGeneration.open(
                                     memoryManager,
                                     getDataFile(generationFile),
@@ -245,6 +267,7 @@ public final class Store<K, V> implements Closeable {
                         }
                     }
                 } else {
+                    // TODO 会把dataDir和rootdir中的文件放到toDelete里面？
                     Collections.addAll(toDelete, dataDir.listFiles(new FilenameFilter() {
                         @Override
                         public boolean accept(File dir, String name) {
@@ -257,9 +280,12 @@ public final class Store<K, V> implements Closeable {
                             return pathname.isDirectory() && pathname.getName().matches("\\d+");
                         }
                     }));
+                    // 创建一个新的log文件
                     final File newLog = getNextLogFile();
+                    // 从volatileGenerationFile中加载一个nextVolatileGeneration
                     nextVolatileGeneration = new VolatileGeneration<K, V>(newLog, keySerializer, valueSerializer, comparator);
                     nextVolatileGeneration.replayTransactionLog(volatileGenerationFile);
+                    // 把文件加载进来
                     for (String generationName : oldStableGenerations) {
                         final File generationFile = new File(latestDir, generationName);
                         if (generationName.endsWith(".log")) {
@@ -332,6 +358,7 @@ public final class Store<K, V> implements Closeable {
     private long findMaxTimestamp(final File dir, long maxTimestamp) {
         for (String str : dir.list()) {
             long timestamp = 0;
+            // 只有数字的，或者数字.log的。
             if (str.matches("\\d+")) {
                 timestamp = Long.parseLong(str);
             } else if (str.matches("\\d+\\.log")) {
