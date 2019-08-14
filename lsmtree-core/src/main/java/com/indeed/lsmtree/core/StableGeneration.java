@@ -363,13 +363,11 @@ public final class StableGeneration {
 
     public static class Writer {
 
-        public static <K, V> void write(BloomFilter.MemoryManager memoryManager, File path, final List<Generation<K, V>> generations, Serializer<K> keySerializer, final Serializer<V> valueSerializer, Comparator<K> keyComparator, StorageType storageType, CompressionCodec codec, boolean hasDeletions)
-                throws IOException {
+        public static <K, V> void write(BloomFilter.MemoryManager memoryManager, File path, final List<Generation<K, V>> generations, Serializer<K> keySerializer, final Serializer<V> valueSerializer, Comparator<K> keyComparator, StorageType storageType, CompressionCodec codec, boolean hasDeletions) throws IOException {
             write(memoryManager, path, generations, keySerializer, valueSerializer, keyComparator, storageType, codec, hasDeletions, true);
         }
 
-        public static <K, V> void write(BloomFilter.MemoryManager memoryManager, File path, final List<Generation<K, V>> generations, Serializer<K> keySerializer, final Serializer<V> valueSerializer, Comparator<K> keyComparator, StorageType storageType, CompressionCodec codec, boolean hasDeletions, boolean useBloomFilter)
-                throws IOException {
+        public static <K, V> void write(BloomFilter.MemoryManager memoryManager, File path, final List<Generation<K, V>> generations, Serializer<K> keySerializer, final Serializer<V> valueSerializer, Comparator<K> keyComparator, StorageType storageType, CompressionCodec codec, boolean hasDeletions, boolean useBloomFilter) throws IOException {
             ImmutableBTreeIndex.Reader reader = null;
             if (storageType == StorageType.INLINE) {
                 final Iterator<Generation.Entry<K, V>> iterator = mergeIterators(generations, keyComparator);
@@ -436,6 +434,7 @@ public final class StableGeneration {
         }
 
         private static <K, V> Iterator<Generation.Entry<K, V>> mergeIterators(final List<Generation<K, V>> generations, final Comparator<K> keyComparator) throws IOException {
+            // Lists.transform将一种类型转成另一种
             return new MergingIterator<K, V>(Lists.transform(generations, new Function<Generation<K, V>, Iterator<Generation.Entry<K, V>>>() {
                 @Override
                 public Iterator<Generation.Entry<K, V>> apply(Generation<K, V> input) {
