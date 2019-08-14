@@ -245,9 +245,13 @@ public final class StableGeneration {
             return null;
         }
 
+        // 查找一个值
         private Entry<K, V> lookupValue(Entry<K, Long> result) {
+            // 首先判断是否被删除
             if (result.isDeleted()) return Entry.createDeleted(result.getKey());
             try {
+                // result里面存放的是地址。然后再从文件里面拿Value
+                // 传入的result是一个Key和地址的Entry
                 return Entry.create(result.getKey(), recordFile.get(result.getValue()));
             } catch (IOException e) {
                 throw new RuntimeIOException(e);
