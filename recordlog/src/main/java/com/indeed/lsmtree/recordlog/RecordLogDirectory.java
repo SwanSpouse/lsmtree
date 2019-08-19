@@ -104,9 +104,7 @@ public final class RecordLogDirectory<E> implements RecordFile<E> {
             return new Writer(file, serializer, codec, rollFrequency, blockSize, fileIndexBits, recordIndexBits, padBits, maxSegment);
         }
 
-        private Writer(
-                File file, Serializer<E> serializer, CompressionCodec codec, final long rollFrequency, int blockSize, int fileIndexBits, int recordIndexBits, int padBits, int maxSegment
-        ) throws IOException {
+        private Writer(File file, Serializer<E> serializer, CompressionCodec codec, final long rollFrequency, int blockSize, int fileIndexBits, int recordIndexBits, int padBits, int maxSegment) throws IOException {
             this.path = file;
             this.serializer = serializer;
             this.codec = codec;
@@ -118,49 +116,60 @@ public final class RecordLogDirectory<E> implements RecordFile<E> {
             this.rollFrequency = rollFrequency;
             tmpPath.mkdirs();
             if (maxSegment < 0) {
+                // 获取数据分片个数
                 currentSegmentNum = getMaxSegmentNum(path);
                 if (currentSegmentNum == -1 || verifySegmentIntegrity(path, currentSegmentNum)) currentSegmentNum++;
             } else {
                 currentSegmentNum = maxSegment + 1;
             }
             log.info("current segment num: " + currentSegmentNum);
+            // 根据分片来创建writer
             currentWriter = createWriter(currentSegmentNum);
             lastRollTime = System.currentTimeMillis();
         }
 
         private RecordFile.Writer createWriter(int segmentNum) throws IOException {
+            // 初始化writer
             currentWriterPath = new File(tmpPath, String.valueOf(segmentNum) + ".rec");
+            // 获取writer的句柄
             return BlockCompressedRecordFile.Writer.open(currentWriterPath, serializer, codec, blockSize, recordIndexBits, padBits);
         }
 
         @Override
         public long append(final E entry) throws IOException {
+            // 如果时间间隔超过指定指定频率，则将数据写入文件，同时生成新文件；
             if (System.currentTimeMillis() - lastRollTime > rollFrequency) {
                 roll();
             }
+            // 将数据append到当前的writer
             final long writerAddress = currentWriter.append(entry);
-            if (writerAddress >= 1L << segmentShift) throw new IOException("current writer has exceeded maximum size");
+            if (writerAddress >= 1L << segmentShift)
+                throw new IOException("current writer has exceeded maximum size");
             return (((long) currentSegmentNum) << segmentShift) + writerAddress;
         }
 
+        // 将数据写入文件，同时生成一个新文件；
         public void roll() throws IOException {
+            // 将老数据刷写到磁盘上
             currentWriter.sync();
             currentWriter.close();
+            // 获取当前文件的路径
             final File segmentFile = getSegmentPath(path, currentSegmentNum, true);
             currentWriterPath.renameTo(segmentFile);
+            // 创建新文件
             currentWriter = createWriter(++currentSegmentNum);
+            // 更新lastRollTime
             lastRollTime = System.currentTimeMillis();
         }
 
         public boolean verifySegmentIntegrity(File file, int segmentNum) {
             BlockCompressedRecordFile<E> recordFile = null;
             try {
-                recordFile =
-                        new BlockCompressedRecordFile.Builder(getSegmentPath(file, segmentNum, false), serializer, codec)
-                                .setBlockSize(blockSize)
-                                .setRecordIndexBits(recordIndexBits)
-                                .setPadBits(padBits)
-                                .build();
+                recordFile = new BlockCompressedRecordFile.Builder(getSegmentPath(file, segmentNum, false), serializer, codec)
+                        .setBlockSize(blockSize)
+                        .setRecordIndexBits(recordIndexBits)
+                        .setPadBits(padBits)
+                        .build();
             } catch (IOException e) {
                 return false;
             } finally {
@@ -349,16 +358,20 @@ public final class RecordLogDirectory<E> implements RecordFile<E> {
         fileCache = new FileCache(mlockFiles);
     }
 
+    // 读取数据
     @Override
     public E get(long address) throws IOException {
+        // 首先根据地址来计算所在文件
         final int segmentNum = (int) (address >>> segmentShift);
         final Option<SharedReference<BlockCompressedRecordFile<E>>> option = fileCache.get(segmentNum);
         if (option.isNone()) {
             throw new IOException("address is invalid: " + address);
         }
+        // 获取地址所在文件
         final SharedReference<BlockCompressedRecordFile<E>> reference = option.some();
         final E ret;
         try {
+            // 获取数据
             ret = reference.get().get(address & segmentMask);
         } finally {
             Closeables2.closeQuietly(reference, log);

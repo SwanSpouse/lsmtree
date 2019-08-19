@@ -76,6 +76,7 @@ public final class BlockCompressedRecordFile<E> implements RecordFile<E> {
     private final int blockSize;
     private final int padBits;
 
+    // TODO ??? 这个还不是很理解
     private final Supplier<? extends Either<IOException, ? extends RandomAccessDataInput>> inputSupplier;
 
     private final BlockCache blockCache;
@@ -88,12 +89,15 @@ public final class BlockCompressedRecordFile<E> implements RecordFile<E> {
 
     private final SharedReference<Closeable> closeableRef;
 
+    // 初始化计数器
     private static final AtomicLong openFileCounter = new AtomicLong(0);
 
+    // 打开文件的个数
     public static long getOpenFileCount() {
         return openFileCounter.get();
     }
 
+    // 打开BlockCompressedRecordFile
     public static <E> BlockCompressedRecordFile<E> open(final File file, Serializer<E> serializer, CompressionCodec codec, BlockingQueue<Decompressor> decompressorPool, int blockSize, int recordIndexBits, int padBits, boolean mlockFiles, int maxChunkSize) throws IOException {
         final MMapBuffer buffer = new MMapBuffer(file, FileChannel.MapMode.READ_ONLY, ByteOrder.BIG_ENDIAN);
         try {
@@ -101,6 +105,7 @@ public final class BlockCompressedRecordFile<E> implements RecordFile<E> {
                 buffer.mlock(0, buffer.memory().length());
             }
             final Memory memory = buffer.memory();
+            // 计数器
             openFileCounter.incrementAndGet();
             return new BlockCompressedRecordFile<E>(
                     new Supplier<Either<IOException, MemoryRandomAccessDataInput>>() {
@@ -142,6 +147,7 @@ public final class BlockCompressedRecordFile<E> implements RecordFile<E> {
         return metadata;
     }
 
+    // 构造函数
     public BlockCompressedRecordFile(final Supplier<? extends Either<IOException, ? extends RandomAccessDataInput>> inputSupplier, final Closeable closeable, String file, Serializer<E> serializer, CompressionCodec codec, BlockingQueue<Decompressor> decompressorPool, int blockSize, int recordIndexBits, int padBits, int maxChunkSize) throws IOException {
         this.inputSupplier = inputSupplier;
         this.file = file;
@@ -354,10 +360,13 @@ public final class BlockCompressedRecordFile<E> implements RecordFile<E> {
     private final class Reader implements RecordFile.Reader<E> {
 
         private long position;
+        // 返回当前的数据
         private E current;
 
+        // 当前记录数
         private int currentRecord = 0;
 
+        // Option是为了防止空指针问题而引入的容器
         private Option<BlockCacheEntry> currentBlock;
         private long blockAddress = 0;
 
@@ -369,9 +378,11 @@ public final class BlockCompressedRecordFile<E> implements RecordFile<E> {
             this.ref = ref;
         }
 
+        // 根据seekAddress初始化reader
         public Reader(SharedReference<Closeable> ref, long seekAddress) throws IOException {
             this.ref = ref;
             initialized = true;
+            // 从seekAddress地址开始获取对应的Block
             final long newBlockAddress = (seekAddress >>> shift) & padMask;
             currentBlock = blockCache.get(newBlockAddress).get();
             blockAddress = newBlockAddress;
@@ -398,6 +409,7 @@ public final class BlockCompressedRecordFile<E> implements RecordFile<E> {
                 return false;
             }
             BlockCacheEntry block = currentBlock.some();
+            // 如果当前记录是当前Block的最后一条记录，则从下一个Block中来找
             if (currentRecord == block.size()) {
                 blockAddress = block.getNextBlockStartAddress();
                 currentBlock = blockCache.get(blockAddress).get();
@@ -450,28 +462,34 @@ public final class BlockCompressedRecordFile<E> implements RecordFile<E> {
                 try {
                     in = input.get();
                     in.seek(blockAddress);
+                    // 首先读取block的长度
                     final int blockLength = in.readInt();
-                    if (blockLength == Integer.MAX_VALUE) return Either.Right.of(Option.<BlockCacheEntry>none());
+                    if (blockLength == Integer.MAX_VALUE)
+                        return Either.Right.of(Option.<BlockCacheEntry>none());
                     if (blockLength < 4)
                         throw new IOException("block length for block at address " + blockAddress + " in file " + file + " is " + blockLength + " which is less than 4. this is not possible. this address is probably no good.");
+                    // 计算得到blockEnd的地址
                     final long blockEnd = (((blockAddress + 8 + blockLength - 1) >>> padBits) + 1) << padBits;
                     final long maxAddress = in.length() - 12;
                     if (blockLength < 0 || blockEnd > maxAddress)
                         throw new IOException("block address " + blockAddress + " in file " + file + " is no good, length is " + blockLength + " and end of data is " + maxAddress);
+                    // 读取校验和
                     final int checksum = in.readInt();
                     if (maxChunkSize > 0) {
                         final int chunkLength = in.readInt();
                         if (chunkLength > maxChunkSize)
                             throw new IOException("first chunk length (" + chunkLength + ") for block at address " + blockAddress + " in file " + file + " is greater than " + maxChunkSize + ". while this may be correct it is extremely unlikely and this is probably a bad address.");
+                        // 在这里跳过长度字节和校验和
                         in.seek(blockAddress + 8);
                     }
+                    // 读取数据
                     final byte[] compressedBytes = new byte[blockLength];
                     in.readFully(compressedBytes);
                     final int padLength = (int) (pad - in.position() % pad);
                     if (padLength != pad) {
                         in.seek(in.position() + padLength);
                     }
-
+                    // 进行解压缩
                     final CheckedInputStream checksumStream = new CheckedInputStream(new ByteArrayInputStream(compressedBytes), new Adler32());
                     Decompressor decompressor = decompressorPool.poll();
                     if (decompressor == null) {
@@ -484,12 +502,15 @@ public final class BlockCompressedRecordFile<E> implements RecordFile<E> {
                     decompressed.close();
                     decompressedByteStream.close();
                     decompressorPool.offer(decompressor);
+                    // 校验校验和
                     if (((int) checksumStream.getChecksum().getValue()) != checksum)
                         throw new IOException("checksum for chunk at block address " + blockAddress + " does not match data");
                     final byte[] decompressedBytes = decompressedByteStream.toByteArray();
                     final CountingInputStream counter = new CountingInputStream(new ByteArrayInputStream(decompressedBytes));
                     final DataInputStream dataInput = new DataInputStream(counter);
+                    // 首先读取记录条数
                     final int numRecords = dataInput.readInt();
+                    // 初始化各个块的大小，
                     final int[] recordOffsets = new int[numRecords + 1];
                     int sum = 0;
                     for (int i = 0; i < numRecords; i++) {
@@ -500,8 +521,10 @@ public final class BlockCompressedRecordFile<E> implements RecordFile<E> {
                     recordOffsets[numRecords] = sum;
                     final int count = (int) counter.getCount();
                     dataInput.close();
+                    // 读取真正的数据
                     final byte[] block = new byte[decompressedBytes.length - count];
                     System.arraycopy(decompressedBytes, count, block, 0, block.length);
+                    // 在这里把数据吐回去
                     return Either.Right.of(Option.some(new BlockCacheEntry(recordOffsets, new HeapMemory(block, ByteOrder.BIG_ENDIAN), in.position())));
                 } catch (IOException e) {
                     log.info("error reading block at address " + blockAddress + " in file " + file, e);
@@ -517,23 +540,28 @@ public final class BlockCompressedRecordFile<E> implements RecordFile<E> {
         }
     }
 
+    // BlockCacheEntry Block中的一条记录
     private static final class BlockCacheEntry {
         private final int[] recordOffsets;
         private final Memory block;
         private final long nextBlockStartAddress;
 
+        // 根据 recordOffsets来构造BlockCacheEntry
         public BlockCacheEntry(final int[] recordOffsets, final Memory block, final long nextBlockStartAddress) {
             this.recordOffsets = recordOffsets;
             this.block = block;
             this.nextBlockStartAddress = nextBlockStartAddress;
         }
 
+        // TODO ??? 这个offset数组里面还放了其他别的东西吗？
         public int size() {
             return recordOffsets.length - 1;
         }
 
         public Memory get(int index) {
+            // 首先要获取到对应数据记录的长度
             final int length = recordOffsets[index + 1] - recordOffsets[index];
+            // 从Block中返回length长度的数据
             return block.slice(recordOffsets[index], length);
         }
 
@@ -542,6 +570,7 @@ public final class BlockCompressedRecordFile<E> implements RecordFile<E> {
         }
     }
 
+    // 构造器，用来构造Block
     public final static class Builder<E> {
 
         private File file;
