@@ -11,7 +11,7 @@
  * express or implied. See the License for the specific language governing permissions and
  * limitations under the License.
  */
- package com.indeed.lsmtree.recordlog;
+package com.indeed.lsmtree.recordlog;
 
 import com.google.common.base.Supplier;
 import com.google.common.base.Throwables;
@@ -130,14 +130,15 @@ public final class BlockCompressedRecordFile<E> implements RecordFile<E> {
         }
     }
 
-    public static @Nullable byte[] getMetadata(File file) throws IOException {
+    public static @Nullable
+    byte[] getMetadata(File file) throws IOException {
         final long length = file.length();
         final MMapBuffer buffer = new MMapBuffer(file, 0, length, FileChannel.MapMode.READ_ONLY, ByteOrder.BIG_ENDIAN);
         final DirectMemory memory = buffer.memory();
         final int metadataLength = memory.getInt(length - 12);
         if (metadataLength == Integer.MAX_VALUE) return null;
         final byte[] metadata = new byte[metadataLength];
-        memory.getBytes(length-12-metadataLength, metadata);
+        memory.getBytes(length - 12 - metadataLength, metadata);
         return metadata;
     }
 
@@ -149,10 +150,10 @@ public final class BlockCompressedRecordFile<E> implements RecordFile<E> {
         this.blockSize = blockSize;
         this.padBits = padBits;
         this.maxChunkSize = maxChunkSize;
-        pad = 1<<padBits;
-        padMask = ~(long)(pad-1);
+        pad = 1 << padBits;
+        padMask = ~(long) (pad - 1);
         shift = Math.max(recordIndexBits - padBits, 0);
-        mask = (1L<<recordIndexBits)-1;
+        mask = (1L << recordIndexBits) - 1;
         closeableRef = SharedReference.create(closeable);
         try {
             blockCache = new BlockCache(decompressorPool);
@@ -185,54 +186,74 @@ public final class BlockCompressedRecordFile<E> implements RecordFile<E> {
         }
 
         public Writer(SyncableDataOutput out, Serializer<E> serializer, CompressionCodec codec, int blockSize, int recordIndexBits, int padBits) {
-            if (blockSize > 1024*1024*16) throw new IllegalArgumentException("block size must be less than 2^24");
+            // 每块的大小不能超过16MB
+            if (blockSize > 1024 * 1024 * 16)
+                throw new IllegalArgumentException("block size must be less than 2^24");
             this.out = out;
-            lengthBuffer = new int[1<<recordIndexBits];
+            lengthBuffer = new int[1 << recordIndexBits];
             currentBlockBytes = new UnsafeByteArrayOutputStream(blockSize);
             currentBlockOut = new DataOutputStream(currentBlockBytes);
-            pad = 1<<padBits;
+            // TODO pad 是用来进行对齐的？
+            pad = 1 << padBits;
             shift = Math.max(recordIndexBits - padBits, 0);
             this.serializer = serializer;
             this.codec = codec;
             this.blockSize = blockSize;
         }
 
+        // append 操作
         public long append(final E entry) throws IOException {
             if ((currentBlockBytes.size() >= blockSize && numRecords > 0) || numRecords == lengthBuffer.length) {
+                // 刷写到文件中
                 flushBuffer();
             }
+            // 获取应该写入的位置（当前块的末尾）
             final int start = currentBlockBytes.size();
+            // 将数据写入到块的末尾
             serializer.write(entry, currentBlockOut);
-            final int length = (currentBlockBytes.size()-start);
+            // 计算写入数据的长度
+            final int length = (currentBlockBytes.size() - start);
+            // 将写入数据的长度记录到lengthBuffer中
             lengthBuffer[numRecords] = length;
-            final long ret = blockAddress+numRecords;
+            // TODO ???
+            final long ret = blockAddress + numRecords;
+            // 记录数+1
             numRecords++;
             return ret;
         }
 
+        // 将内存中的数据刷写到磁盘中
+        //  compressorStream中的数据格式「numRecord」「recordLength 0」「recordLength 1」... 「recordLength N」「Data」
         private void flushBuffer() throws IOException {
-            final UnsafeByteArrayOutputStream compressedBuffer = new UnsafeByteArrayOutputStream(blockSize+4*numRecords);
+            final UnsafeByteArrayOutputStream compressedBuffer = new UnsafeByteArrayOutputStream(blockSize + 4 * numRecords);
             final CheckedOutputStream checksumStream = new CheckedOutputStream(compressedBuffer, new Adler32());
             final DataOutputStream compressorStream = new DataOutputStream(codec.createOutputStream(checksumStream));
+            // 写入记录条数
             compressorStream.writeInt(numRecords);
             for (int i = 0; i < numRecords; i++) {
-                VIntUtils.writeVInt((OutputStream)compressorStream, lengthBuffer[i]);
+                // 写入每条记录的大小
+                VIntUtils.writeVInt((OutputStream) compressorStream, lengthBuffer[i]);
             }
+            // 写入block 的块大小
             compressorStream.write(currentBlockBytes.getByteArray(), 0, currentBlockBytes.size());
             compressorStream.close();
+
+            // 写入 compressedBuffer中的数据长度
             out.writeInt(compressedBuffer.size());
-            final int checksum = (int)checksumStream.getChecksum().getValue();
+            // 计算校验和
+            final int checksum = (int) checksumStream.getChecksum().getValue();
             out.writeInt(checksum);
             out.write(compressedBuffer.getByteArray(), 0, compressedBuffer.size());
+            // 清空Block
             currentBlockBytes.reset();
             numRecords = 0;
-            final int padLength = (int)(pad-out.position()%pad);
+            final int padLength = (int) (pad - out.position() % pad);
             if (padLength != pad) {
                 for (int i = 0; i < padLength; i++) {
                     out.writeByte(0);
                 }
             }
-            blockAddress = out.position()<<shift;
+            blockAddress = out.position() << shift;
         }
 
         public void close() throws IOException {
@@ -304,13 +325,13 @@ public final class BlockCompressedRecordFile<E> implements RecordFile<E> {
 
     @Override
     public E get(long address) throws IOException {
-        final long blockAddress = (address>>>shift)&padMask;
+        final long blockAddress = (address >>> shift) & padMask;
         final Option<BlockCacheEntry> blockOption = blockCache.get(blockAddress).get();
-        if (blockOption.isNone()) throw new IOException("illegal address "+address+" in file "+file);
+        if (blockOption.isNone()) throw new IOException("illegal address " + address + " in file " + file);
         final BlockCacheEntry block = blockOption.some();
-        final int recordIndex = (int) (address&mask);
+        final int recordIndex = (int) (address & mask);
         if (recordIndex >= block.size()) {
-            throw new IOException("there are only "+block.size()+" in block at address "+blockAddress+", seek request is for record number "+recordIndex);
+            throw new IOException("there are only " + block.size() + " in block at address " + blockAddress + ", seek request is for record number " + recordIndex);
         }
         return serializer.read(new MemoryDataInput(block.get(recordIndex)));
     }
@@ -351,18 +372,18 @@ public final class BlockCompressedRecordFile<E> implements RecordFile<E> {
         public Reader(SharedReference<Closeable> ref, long seekAddress) throws IOException {
             this.ref = ref;
             initialized = true;
-            final long newBlockAddress = (seekAddress>>>shift)&padMask;
+            final long newBlockAddress = (seekAddress >>> shift) & padMask;
             currentBlock = blockCache.get(newBlockAddress).get();
             blockAddress = newBlockAddress;
             if (currentBlock.isNone()) {
                 done = true;
-                throw new IOException("address "+seekAddress+" is invalid because block does not exist in file "+file);
+                throw new IOException("address " + seekAddress + " is invalid because block does not exist in file " + file);
             }
             final BlockCacheEntry block = currentBlock.some();
-            currentRecord = (int)(seekAddress&mask);
+            currentRecord = (int) (seekAddress & mask);
             if (currentRecord >= block.size()) {
                 done = true;
-                throw new IOException("there are only "+block.size()+" in block at address "+newBlockAddress+", seek request is for record number "+currentRecord);
+                throw new IOException("there are only " + block.size() + " in block at address " + newBlockAddress + ", seek request is for record number " + currentRecord);
             }
         }
 
@@ -387,7 +408,7 @@ public final class BlockCompressedRecordFile<E> implements RecordFile<E> {
                 }
                 block = currentBlock.some();
             }
-            position = (blockAddress<<shift)+currentRecord;
+            position = (blockAddress << shift) + currentRecord;
             current = serializer.read(new MemoryDataInput(block.get(currentRecord)));
             currentRecord++;
             return true;
@@ -431,21 +452,24 @@ public final class BlockCompressedRecordFile<E> implements RecordFile<E> {
                     in.seek(blockAddress);
                     final int blockLength = in.readInt();
                     if (blockLength == Integer.MAX_VALUE) return Either.Right.of(Option.<BlockCacheEntry>none());
-                    if (blockLength < 4) throw new IOException("block length for block at address "+blockAddress+" in file "+file+" is "+blockLength+" which is less than 4. this is not possible. this address is probably no good.");
-                    final long blockEnd = (((blockAddress+8+blockLength-1)>>>padBits)+1)<<padBits;
+                    if (blockLength < 4)
+                        throw new IOException("block length for block at address " + blockAddress + " in file " + file + " is " + blockLength + " which is less than 4. this is not possible. this address is probably no good.");
+                    final long blockEnd = (((blockAddress + 8 + blockLength - 1) >>> padBits) + 1) << padBits;
                     final long maxAddress = in.length() - 12;
-                    if (blockLength < 0 || blockEnd > maxAddress) throw new IOException("block address "+blockAddress+" in file "+file+" is no good, length is "+blockLength+" and end of data is "+maxAddress);
+                    if (blockLength < 0 || blockEnd > maxAddress)
+                        throw new IOException("block address " + blockAddress + " in file " + file + " is no good, length is " + blockLength + " and end of data is " + maxAddress);
                     final int checksum = in.readInt();
                     if (maxChunkSize > 0) {
                         final int chunkLength = in.readInt();
-                        if (chunkLength > maxChunkSize) throw new IOException("first chunk length ("+chunkLength+") for block at address "+blockAddress+" in file "+file+" is greater than "+maxChunkSize+". while this may be correct it is extremely unlikely and this is probably a bad address.");
+                        if (chunkLength > maxChunkSize)
+                            throw new IOException("first chunk length (" + chunkLength + ") for block at address " + blockAddress + " in file " + file + " is greater than " + maxChunkSize + ". while this may be correct it is extremely unlikely and this is probably a bad address.");
                         in.seek(blockAddress + 8);
                     }
                     final byte[] compressedBytes = new byte[blockLength];
                     in.readFully(compressedBytes);
-                    final int padLength = (int)(pad-in.position()%pad);
+                    final int padLength = (int) (pad - in.position() % pad);
                     if (padLength != pad) {
-                        in.seek(in.position()+padLength);
+                        in.seek(in.position() + padLength);
                     }
 
                     final CheckedInputStream checksumStream = new CheckedInputStream(new ByteArrayInputStream(compressedBytes), new Adler32());
@@ -454,32 +478,33 @@ public final class BlockCompressedRecordFile<E> implements RecordFile<E> {
                         decompressor = codec.createDecompressor();
                     }
                     decompressor.reset();
-                    final InputStream decompressed = new BlockDecompressorStream(checksumStream, decompressor, blockSize*2);
-                    final ByteArrayOutputStream decompressedByteStream = new ByteArrayOutputStream(blockSize*2);
+                    final InputStream decompressed = new BlockDecompressorStream(checksumStream, decompressor, blockSize * 2);
+                    final ByteArrayOutputStream decompressedByteStream = new ByteArrayOutputStream(blockSize * 2);
                     ByteStreams.copy(decompressed, decompressedByteStream);
                     decompressed.close();
                     decompressedByteStream.close();
                     decompressorPool.offer(decompressor);
-                    if (((int)checksumStream.getChecksum().getValue()) != checksum) throw new IOException("checksum for chunk at block address "+blockAddress+" does not match data");
+                    if (((int) checksumStream.getChecksum().getValue()) != checksum)
+                        throw new IOException("checksum for chunk at block address " + blockAddress + " does not match data");
                     final byte[] decompressedBytes = decompressedByteStream.toByteArray();
                     final CountingInputStream counter = new CountingInputStream(new ByteArrayInputStream(decompressedBytes));
                     final DataInputStream dataInput = new DataInputStream(counter);
                     final int numRecords = dataInput.readInt();
-                    final int[] recordOffsets = new int[numRecords+1];
+                    final int[] recordOffsets = new int[numRecords + 1];
                     int sum = 0;
                     for (int i = 0; i < numRecords; i++) {
                         recordOffsets[i] = sum;
-                        final int delta = VIntUtils.readVInt((InputStream)dataInput);
-                        sum+=delta;
+                        final int delta = VIntUtils.readVInt((InputStream) dataInput);
+                        sum += delta;
                     }
                     recordOffsets[numRecords] = sum;
-                    final int count = (int)counter.getCount();
+                    final int count = (int) counter.getCount();
                     dataInput.close();
-                    final byte[] block = new byte[decompressedBytes.length-count];
+                    final byte[] block = new byte[decompressedBytes.length - count];
                     System.arraycopy(decompressedBytes, count, block, 0, block.length);
                     return Either.Right.of(Option.some(new BlockCacheEntry(recordOffsets, new HeapMemory(block, ByteOrder.BIG_ENDIAN), in.position())));
                 } catch (IOException e) {
-                    log.info("error reading block at address "+blockAddress+" in file "+file, e);
+                    log.info("error reading block at address " + blockAddress + " in file " + file, e);
                     return Either.Left.of(e);
                 } finally {
                     Closeables2.closeQuietly(in, log);
@@ -504,11 +529,11 @@ public final class BlockCompressedRecordFile<E> implements RecordFile<E> {
         }
 
         public int size() {
-            return recordOffsets.length-1;
+            return recordOffsets.length - 1;
         }
 
         public Memory get(int index) {
-            final int length = recordOffsets[index+1]-recordOffsets[index];
+            final int length = recordOffsets[index + 1] - recordOffsets[index];
             return block.slice(recordOffsets[index], length);
         }
 

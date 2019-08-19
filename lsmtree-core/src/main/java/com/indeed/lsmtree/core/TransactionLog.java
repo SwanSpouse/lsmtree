@@ -28,6 +28,7 @@ import java.io.IOException;
 
 /**
  * @author jplaisance
+ * WAL中的LOG结构
  */
 public final class TransactionLog {
 
@@ -118,6 +119,7 @@ public final class TransactionLog {
             }
             try {
                 // 先写文件，然后进行同步，写log的时候是直接append就好了。
+                // 写了之后返回写了多少byte
                 sizeInBytes = writer.append(new OpKeyValue<K, V>(TransactionType.PUT, key, value));
                 if (sync) {
                     writer.sync();
