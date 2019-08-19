@@ -249,6 +249,7 @@ public final class BlockCompressedRecordFile<E> implements RecordFile<E> {
             // 计算校验和
             final int checksum = (int) checksumStream.getChecksum().getValue();
             out.writeInt(checksum);
+            // 写入数据
             out.write(compressedBuffer.getByteArray(), 0, compressedBuffer.size());
             // 清空Block
             currentBlockBytes.reset();

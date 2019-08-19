@@ -44,9 +44,15 @@ RecordFile有如下3中实现：
 
 `BasicRecordFile` stores entries sequentially as serialized entry byte length, CRC32 checksum, entry bytes.
 
+`BasicRecordFile` 将数据以数据长度、CRC32校验和、数据，这样的格式顺序存储在文件中。
+
 `BlockCompressedRecordFile` is a `RecordFile` implementation that compresses the byte[] entries in blocks of a given size.  The compression algorithm is pluggable.  The block size is configurable.  There are a maximum of 2^recordIndexBits records per block.  Each block is padded to a multiple of 2^padBits bytes.  Within each block there is a header containing an int for the number of entries and a list of varint encoded ints for the offsets into the block for each entry.  The address scheme uses the low recordIndexBits for the index in the record offset list of the record.  The rest of the bits are used for the address.  Since the low padBits bits are always 0 they are not stored.  There is an additional class called BlockCache which enables blocks to be cached across readers using a weak valued concurrent computing hash map.
 
+`BlockCompressedRecordFile` 是RecordFile接口的一个实现；它将数据压缩存储在指定大小的Block中，其中压缩算法和Block大小是可配置的；每个Block最多存放有2^recordIndexBits条记录，每个Block的数据会被对齐成2的padBits次幂个字节；每个Block都包含一个Header，Header中包含记录的条数和一组变长、encode过的int数组，数组中记录了每条记录的偏移量。现在的寻址方案使用低位在数组中索引记录的偏移量；使用其余位作为地址。因为低paddits位总是0，所以不会存储它们。还有blockcache 类，它使用哈希Map在reader之间缓存Block。
+
 `RecordLogDirectory` is a `RecordFile` implementation which stores lots of BlockCompressedRecordFiles in a directory in sequentially numbered segment files.  The writer provides the additional method roll(), which synchronizes the current file and starts a new one for future appends.  RecordLogDirectory uses the top 28 bits of the address for the segment file number, which limits each individual segment file to 4 GB (they can be slightly larger but the last addressable block is at address 2^32).  RecordLogDirectory maintains a fixed size cache of segments addressed by segment number and containing block caches.  The block caches are reference counted to make closing the file handles possible when they are evicted from the cache.
+
+`RecordLogDirectory` 是一个RecordFile实现，它按序存储了很多BlockCompressedRecordFiles。Writer提供了roll()方法，它将当前文件同步到磁盘中，并创建一个新的用于添加记录的文件。RecordLogDirectory 使用文件地址的前28位，这也将每个文件限制为4 GB。RecordLogDirectory 维护了固定大小的cache，用于缓存segments 编号和其中包含block；Block通过引用计数法来保证当没有handler在使用它们时，它们会被从cache中移除。
 
 ## CompressedBlockRecordFile file format
 ```
