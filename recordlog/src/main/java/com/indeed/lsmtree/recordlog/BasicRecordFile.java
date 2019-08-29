@@ -166,7 +166,7 @@ public final class BasicRecordFile<E> implements RecordFile<E> {
     }
 
     // 这个Writer只提供append操作
-        public static final class Writer<E> implements RecordFile.Writer<E> {
+    public static final class Writer<E> implements RecordFile.Writer<E> {
 
         final BufferedFileDataOutputStream out;
         private final Serializer<E> serializer;
